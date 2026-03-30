@@ -22,12 +22,15 @@ import kotlinx.coroutines.launch
 import ai.nexuzy.assistant.adapter.ChatAdapter
 import ai.nexuzy.assistant.databinding.ActivityChatBinding
 import ai.nexuzy.assistant.llm.MLCEngineWrapper
-import ai.nexuzy.assistant.llm.QwenEngine
+import ai.nexuzy.assistant.llm.ModelManager
 import ai.nexuzy.assistant.llm.PromptBuilder
+import ai.nexuzy.assistant.llm.QwenEngine
 import ai.nexuzy.assistant.middleware.IntentClassifier
 import ai.nexuzy.assistant.middleware.ToolExecutor
+import ai.nexuzy.assistant.middleware.ToolResult
 import ai.nexuzy.assistant.model.ChatMessage
 import ai.nexuzy.assistant.tools.LocationTool
+import ai.nexuzy.assistant.ui.ModelSelectorFragment
 import java.util.Locale
 
 class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
@@ -53,7 +56,7 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
         toolExecutor = ToolExecutor(this)
         locationTool = LocationTool(this)
-        qwenEngine = QwenEngine(this)
+        qwenEngine   = QwenEngine(this)
 
         setupRecyclerView()
         setupAdMob()
@@ -61,8 +64,11 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setupTTS()
         setupEngineObserver()
         requestPermissions()
+        updateModelBadge()
 
-        addAIMessage("👋 Hi! I'm NexuzyAI \u2014 Qwen3 on-device assistant.\nTry: \"What's the weather?\" or \"Latest news\" or \"Open YouTube\"")
+        // Greeting with device-selected model name
+        addAIMessage("👋 Hi! I'm ${qwenEngine.displayName} — your private on-device AI.\n" +
+            "Try: \"What's the weather?\", \"Latest news\", \"Who made you?\", or \"Open YouTube\"")
 
         binding.sendBtn.setOnClickListener {
             val text = binding.messageInput.text?.toString()?.trim() ?: ""
@@ -70,22 +76,30 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         }
         binding.voiceBtn.setOnClickListener { toggleVoice() }
         binding.clearBtn.setOnClickListener {
-            qwenEngine.resetHistory(); messages.clear(); chatAdapter.notifyDataSetChanged()
-            addAIMessage("👋 Chat cleared! Ask me anything.")
+            qwenEngine.resetHistory()
+            messages.clear()
+            chatAdapter.notifyDataSetChanged()
+            addAIMessage("👋 Chat cleared! I'm ${qwenEngine.displayName}. Ask me anything.")
         }
         binding.aboutBtn.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
         }
+        // Model badge tap → show model selector sheet
+        binding.modelBadge.setOnClickListener { showModelSelector() }
+    }
+
+    private fun updateModelBadge() {
+        binding.modelBadge.text = qwenEngine.displayName
     }
 
     private fun setupEngineObserver() {
         qwenEngine.onStateChange = { state ->
             val label = when (state) {
-                MLCEngineWrapper.EngineState.LOADING    -> "⏳ Loading Qwen3…"
-                MLCEngineWrapper.EngineState.READY      -> "Qwen3 • Ready"
-                MLCEngineWrapper.EngineState.GENERATING -> "⚙️ Generating…"
-                MLCEngineWrapper.EngineState.FAILED     -> "❌ Model Failed"
-                MLCEngineWrapper.EngineState.NOT_LOADED -> "Qwen3 (setup needed)"
+                MLCEngineWrapper.EngineState.LOADING    -> "⏳ Loading…"
+                MLCEngineWrapper.EngineState.READY      -> "${qwenEngine.displayName} • Ready"
+                MLCEngineWrapper.EngineState.GENERATING -> "⚙️ Thinking…"
+                MLCEngineWrapper.EngineState.FAILED     -> "❌ Failed"
+                MLCEngineWrapper.EngineState.NOT_LOADED -> qwenEngine.displayName
             }
             runOnUiThread { binding.modelBadge.text = label }
         }
@@ -99,6 +113,17 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 }
             }
         }
+    }
+
+    private fun showModelSelector() {
+        ModelSelectorFragment(
+            modelManager = qwenEngine.modelManager,
+            onModelSelected = { model ->
+                addAIMessage("🔄 Switching to ${model.displayName}… (requires MLC build)")
+                qwenEngine.loadModel(model)
+                updateModelBadge()
+            }
+        ).show(supportFragmentManager, "model_selector")
     }
 
     private fun setupRecyclerView() {
@@ -124,23 +149,64 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         lifecycleScope.launch {
             try {
                 val intent = IntentClassifier.classify(userInput)
-                val toolResult = toolExecutor.execute(intent, userInput)
+
+                // Handle MODEL_INFO intent with real model data
+                val toolResult = if (intent == IntentClassifier.Intent.MODEL_INFO) {
+                    val m = qwenEngine.activeModel
+                    val info = buildString {
+                        appendLine("🧠 I am ${qwenEngine.displayName}")
+                        if (m != null) {
+                            appendLine("🔧 Backend model : ${m.modelId}")
+                            appendLine("💾 Model size     : ~${qwenEngine.modelManager.formatSize(m.estimatedBytes)}")
+                            appendLine("📱 Your device RAM: ${qwenEngine.modelManager.getRamLabel()}")
+                            appendLine("🔒 Runs on-device, zero data collected.")
+                        }
+                    }
+                    ai.nexuzy.assistant.middleware.ToolResult(
+                        type = ToolResult.Type.INFO, content = info, directReply = true
+                    )
+                } else {
+                    toolExecutor.execute(intent, userInput)
+                }
+
+                // Direct replies (location, actions, developer info) — no AI needed
+                if (toolResult.directReply && toolResult.content.isNotBlank()) {
+                    showTyping(false)
+                    addAIMessage(toolResult.content)
+                    speakIfReady(toolResult.content)
+                    return@launch
+                }
+
+                // AI generation (weather, news, general chat)
                 val locationHint = locationTool.getLocationSystemPrompt()
-                val prompt = PromptBuilder.build(userInput, toolResult, locationHint)
+                val prompt = PromptBuilder.build(
+                    userInput       = userInput,
+                    toolContext     = toolResult.content,
+                    locationHint    = locationHint,
+                    activeModelName = qwenEngine.displayName
+                )
                 addAIMessage("")
                 val response = qwenEngine.generate(prompt)
                 if (messages.isNotEmpty() && !messages.last().isUser) {
                     messages[messages.size - 1] = messages.last().copy(text = response)
                     chatAdapter.notifyItemChanged(messages.size - 1)
+                    binding.chatRecyclerView.scrollToPosition(messages.size - 1)
                 }
                 showTyping(false)
-                if (ttsReady && response.isNotBlank()) {
-                    tts?.speak(response.take(200), TextToSpeech.QUEUE_FLUSH, null, "ai")
-                }
+                speakIfReady(response)
+
             } catch (e: Exception) {
                 showTyping(false)
                 addAIMessage("⚠️ ${e.message}")
             }
+        }
+    }
+
+    private fun speakIfReady(text: String) {
+        if (ttsReady && text.isNotBlank()) {
+            // Strip markdown for TTS
+            val plain = text.replace(Regex("[*_`#>\\[\\]()]"), "").take(250)
+            tts?.speak(plain, TextToSpeech.QUEUE_FLUSH, null, "ai")
         }
     }
 
@@ -157,7 +223,9 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun showTyping(show: Boolean) {
-        binding.typingIndicator.visibility = if (show) View.VISIBLE else View.GONE
+        runOnUiThread {
+            binding.typingIndicator.visibility = if (show) View.VISIBLE else View.GONE
+        }
     }
 
     private fun setupSTT() {
@@ -166,9 +234,10 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             override fun onResults(results: Bundle?) {
                 val text = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                 isListening = false; updateVoiceBtn(false)
+                binding.voiceOrb.visibility = View.GONE
                 if (text.isNotEmpty()) { binding.messageInput.setText(""); processInput(text) }
             }
-            override fun onError(error: Int) { isListening = false; updateVoiceBtn(false) }
+            override fun onError(error: Int) { isListening = false; updateVoiceBtn(false); binding.voiceOrb.visibility = View.GONE }
             override fun onReadyForSpeech(p: Bundle?) { binding.voiceOrb.visibility = View.VISIBLE }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rms: Float) {
@@ -219,6 +288,6 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     override fun onDestroy() { super.onDestroy(); tts?.shutdown(); speechRecognizer?.destroy(); adView?.destroy(); qwenEngine.unload() }
-    override fun onPause()  { super.onPause();  adView?.pause() }
-    override fun onResume() { super.onResume(); adView?.resume() }
+    override fun onPause()   { super.onPause();  adView?.pause() }
+    override fun onResume()  { super.onResume(); adView?.resume() }
 }

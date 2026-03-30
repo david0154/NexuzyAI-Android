@@ -1,93 +1,76 @@
 package ai.nexuzy.assistant.llm
 
 import android.content.Context
+import android.util.Log
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
- * QwenEngine: High-level interface over MLCEngineWrapper.
- *
- * Default model: Qwen3-1.7B-q4f16_1-MLC
- * (Official MLC-LLM Android config — mlc-ai/mlc-llm/android/MLCChat/mlc-package-config.json)
- *
- * HuggingFace: https://huggingface.co/mlc-ai/Qwen3-1.7B-q4f16_1-MLC
- * VRAM needed: ~3GB  (works on most mid/high-end Android phones)
- *
- * Lighter fallback: Qwen3-0.6B-q0f16-MLC (~1.5GB VRAM, lower quality)
- * HuggingFace: https://huggingface.co/mlc-ai/Qwen3-0.6B-q0f16-MLC
- *
- * To switch to the lighter model, change DEFAULT_MODEL_ID and DEFAULT_MODEL_LIB below.
+ * QwenEngine — High-level interface for David AI.
+ * Wraps MLCEngineWrapper and ModelManager.
+ * Exposes the active model's David AI display name (e.g. "David AI 1B").
  */
-class QwenEngine(context: Context) {
+class QwenEngine(private val context: Context) {
 
-    companion object {
-        // ✓ Synced with official mlc-package-config.json (mlc-ai/mlc-llm/android/MLCChat)
-        // Change to "Qwen3-0.6B-q0f16-MLC" for low-RAM devices
-        const val DEFAULT_MODEL_ID  = "Qwen3-1.7B-q4f16_1-MLC"
-        const val DEFAULT_MODEL_LIB = "Qwen3-1.7B-q4f16_1-MLC"
-        const val DEFAULT_MODEL_HF  = "https://huggingface.co/mlc-ai/Qwen3-1.7B-q4f16_1-MLC"
-        const val LIGHT_MODEL_ID    = "Qwen3-0.6B-q0f16-MLC"
-        const val LIGHT_MODEL_LIB   = "Qwen3-0.6B-q0f16-MLC"
-        const val LIGHT_MODEL_HF    = "https://huggingface.co/mlc-ai/Qwen3-0.6B-q0f16-MLC"
-    }
+    private val mlcWrapper = MLCEngineWrapper(context)
+    val modelManager = ModelManager(context)
+    private val scope = CoroutineScope(Dispatchers.Main + Job())
 
-    private val wrapper = MLCEngineWrapper(context)
-    private val conversationHistory = mutableListOf<Pair<String, String>>()
+    // Currently loaded model info
+    var activeModel: ModelManager.ModelInfo? = null
+        private set
 
-    val state get() = wrapper.getState()
+    /** Display name shown in UI badge: "David AI 1B", "David AI Lite" etc */
+    val displayName: String get() = activeModel?.displayName ?: "David AI"
+
     var onStateChange: ((MLCEngineWrapper.EngineState) -> Unit)?
-        get() = wrapper.onStateChange
-        set(value) { wrapper.onStateChange = value }
+        get() = mlcWrapper.onStateChange
+        set(v) { mlcWrapper.onStateChange = v }
+
     var onTokenStream: ((String) -> Unit)?
-        get() = wrapper.onTokenStream
-        set(value) { wrapper.onTokenStream = value }
+        get() = mlcWrapper.onTokenStream
+        set(v) { mlcWrapper.onTokenStream = v }
+
+    private val chatHistory = mutableListOf<Pair<String, String>>()
 
     init {
-        if (MLCEngineWrapper.MLC_AVAILABLE) {
-            wrapper.loadModel(DEFAULT_MODEL_ID, DEFAULT_MODEL_LIB)
-        }
+        // Auto-select best model for this device on init
+        val recommended = modelManager.recommendedModel()
+        activeModel = recommended
+        Log.d("QwenEngine", "Auto-selected: ${recommended.displayName} for ${modelManager.getRamLabel()} RAM")
+    }
+
+    /** Load the auto-recommended model */
+    fun loadRecommendedModel() {
+        val model = modelManager.recommendedModel()
+        activeModel = model
+        mlcWrapper.loadModel(model.modelId, model.modelId)
+    }
+
+    /** Manually load a specific model by ModelInfo */
+    fun loadModel(model: ModelManager.ModelInfo) {
+        activeModel = model
+        mlcWrapper.loadModel(model.modelId, model.modelId)
     }
 
     suspend fun generate(prompt: String): String {
-        val response = wrapper.generate(prompt, conversationHistory.toList())
-        val userMsg = prompt.lines()
-            .dropWhile { !it.startsWith("<|im_start|>user") }
-            .drop(1).firstOrNull() ?: ""
-        if (userMsg.isNotEmpty() && response.isNotEmpty()) {
-            conversationHistory.add(Pair(userMsg, response))
-            if (conversationHistory.size > 10) conversationHistory.removeAt(0)
+        val result = mlcWrapper.generate(prompt, chatHistory)
+        if (result.isNotBlank() && !result.startsWith("Error") && !result.startsWith("💡")) {
+            val userPrompt = prompt.lines().lastOrNull { it.isNotBlank() } ?: prompt
+            chatHistory.add(Pair(userPrompt, result))
+            if (chatHistory.size > 10) chatHistory.removeAt(0)
         }
-        return response
+        return result
     }
 
-    fun resetHistory() = wrapper.resetChat().also { conversationHistory.clear() }
-    fun unload() = wrapper.unload()
-
-    /** Download default model (Qwen3-1.7B) from HuggingFace */
-    fun downloadDefaultModel(
-        onProgress: (Int, Int) -> Unit = { _, _ -> },
-        onComplete: () -> Unit = {},
-        onError: (String) -> Unit = {}
-    ) {
-        wrapper.downloadModel(
-            modelId  = DEFAULT_MODEL_ID,
-            modelUrl = DEFAULT_MODEL_HF,
-            onProgress = onProgress,
-            onComplete = onComplete,
-            onError = onError
-        )
+    fun resetHistory() {
+        chatHistory.clear()
+        mlcWrapper.resetChat()
     }
 
-    /** Download lighter Qwen3-0.6B for low-RAM phones */
-    fun downloadLightModel(
-        onProgress: (Int, Int) -> Unit = { _, _ -> },
-        onComplete: () -> Unit = {},
-        onError: (String) -> Unit = {}
-    ) {
-        wrapper.downloadModel(
-            modelId  = LIGHT_MODEL_ID,
-            modelUrl = LIGHT_MODEL_HF,
-            onProgress = onProgress,
-            onComplete = onComplete,
-            onError = onError
-        )
-    }
+    fun unload() = mlcWrapper.unload()
+    fun getState() = mlcWrapper.getState()
 }

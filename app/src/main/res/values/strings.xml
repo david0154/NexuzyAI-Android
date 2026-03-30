@@ -1,42 +1,45 @@
 <resources>
-    <string name="app_name">NexuzyAI</string>
+    <string name="app_name">David AI</string>
 
-    <string name="privacy_policy_text">NEXUZYAI — PRIVACY POLICY
+    <!-- Model display names shown to users -->
+    <string name="model_lite">David AI Lite</string>
+    <string name="model_1b">David AI 1B</string>
+    <string name="model_2b">David AI 2B</string>
+    <string name="model_unknown">David AI</string>
+
+    <string name="privacy_policy_text">DAVID AI — PRIVACY POLICY
 Last updated: March 2026
 
 1. NO DATA COLLECTION
-NexuzyAI does not collect, store, transmit, or share any personal data. This includes but is not limited to: conversation history, voice recordings, location data, device identifiers, usage statistics, or any other personal information.
+David AI does not collect, store, transmit, or share any personal data. This includes but is not limited to: conversation history, voice recordings, location data, device identifiers, usage statistics, or any other personal information.
 
 2. ON-DEVICE PROCESSING
-All AI inference runs entirely on your device using the Qwen3 language model via MLC-LLM. Your conversations never leave your phone. No server receives your messages.
+All AI inference runs entirely on your device using on-device language models via MLC-LLM. Your conversations never leave your phone. No server receives your messages.
 
 3. LOCATION
 Location access (GPS) is used only to provide contextual answers (e.g. local weather). Location data is processed locally and is never transmitted to any server.
 
 4. MICROPHONE
-Microphone access is used only for voice input via Android SpeechRecognizer. Voice processing is handled by your device\u2019s built-in speech recognition. We do not record, store, or transmit audio.
+Microphone access is used only for voice input via Android SpeechRecognizer. We do not record, store, or transmit audio.
 
 5. INTERNET ACCESS
 The app uses internet access only for:
-   \u2022 Fetching weather data from Open-Meteo (anonymous, no personal data)
+   \u2022 Fetching weather data from Open-Meteo (anonymous)
    \u2022 Fetching news headlines from Google News RSS (anonymous)
    \u2022 Displaying Google AdMob ads (governed by Google\u2019s privacy policy)
    \u2022 Optional: downloading model weights on first launch
 
 6. ADVERTISING
-NexuzyAI uses Google AdMob for advertising. Ads may use your device\u2019s advertising ID as governed by Google\u2019s Privacy Policy. You can opt out via Android Settings \u2192 Google \u2192 Ads.
+David AI uses Google AdMob for advertising. You can opt out via Android Settings \u2192 Google \u2192 Ads.
 
 7. OPEN SOURCE
-NexuzyAI is fully open source. You can inspect all source code at:
+David AI is fully open source:
 https://github.com/david0154/NexuzyAI-Android
 
 8. CHILDREN\u2019S PRIVACY
-We do not knowingly collect data from children under 13. Since we collect no data at all, this app is safe for all ages.
+Since we collect no data at all, this app is safe for all ages.
 
-9. CHANGES
-If this policy changes, the updated version will be posted in the GitHub repository and within the app.
-
-10. CONTACT
+9. CONTACT
 For any privacy concerns:
 \u2022 nexuzylab@gmail.com
 \u2022 davidk76011@gmail.com

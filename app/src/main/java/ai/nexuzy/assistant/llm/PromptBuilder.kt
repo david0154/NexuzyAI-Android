@@ -1,49 +1,47 @@
 package ai.nexuzy.assistant.llm
 
-import ai.nexuzy.assistant.middleware.ToolExecutor
-import java.time.LocalDate
-import java.time.LocalTime
-import java.time.format.DateTimeFormatter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
- * Builds Qwen chat-template prompt.
- * Format: <|im_start|>role\ncontent<|im_end|>
- * This is the official Qwen2 prompt format.
+ * PromptBuilder — builds Qwen3 chat-template system prompt.
+ * Injects tool context (weather/news/location) and David AI identity.
  */
 object PromptBuilder {
 
     fun build(
-        userMessage: String,
-        toolResult: ToolExecutor.ToolResult?,
-        locationHint: String = "Kolkata, West Bengal, India"
+        userInput: String,
+        toolContext: String = "",
+        locationHint: String = "",
+        activeModelName: String = "David AI"
     ): String {
-        val date = LocalDate.now().toString()
-        val time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        val date = SimpleDateFormat("EEEE, d MMMM yyyy, h:mm a", Locale.ENGLISH).format(Date())
+
+        val systemPrompt = buildString {
+            appendLine("You are $activeModelName, a private on-device AI assistant.")
+            appendLine("Developed by David. Managed by Nexuzy Lab.")
+            appendLine("Support: nexuzylab@gmail.com | davidk76011@gmail.com")
+            appendLine("You run 100% on-device. You collect zero user data.")
+            appendLine("Current date/time: $date")
+            if (locationHint.isNotBlank()) appendLine(locationHint)
+            appendLine()
+            appendLine("Be helpful, concise, and friendly. For weather/news use the data below.")
+        }
 
         return buildString {
-            // System prompt
             appendLine("<|im_start|>system")
-            appendLine("You are NexuzyAI, a helpful, concise Android voice assistant.")
-            appendLine("User location: $locationHint")
-            appendLine("Date: $date | Time: $time IST")
-            appendLine("Rules: Reply in 2-3 sentences. Be conversational. Use data from TOOL RESULT if provided.")
-            toolResult?.systemHint?.let { appendLine(it) }
-            append("<|im_end|>\n")
-
-            // Tool result injected as a tool turn
-            toolResult?.contextString?.let { ctx ->
-                appendLine("<|im_start|>tool")
-                appendLine(ctx)
-                append("<|im_end|>\n")
+            appendLine(systemPrompt.trim())
+            appendLine("<|im_end|>")
+            if (toolContext.isNotBlank()) {
+                appendLine("<|im_start|>tool_result")
+                appendLine(toolContext.trim())
+                appendLine("<|im_end|>")
             }
-
-            // User message
             appendLine("<|im_start|>user")
-            appendLine(userMessage)
-            append("<|im_end|>\n")
-
-            // Assistant prefix (model completes from here)
-            append("<|im_start|>assistant\n")
+            appendLine(userInput)
+            appendLine("<|im_end|>")
+            append("<|im_start|>assistant")
         }
     }
 }
