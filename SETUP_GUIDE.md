@@ -1,161 +1,155 @@
-# NexuzyAI — Complete Setup Guide
+# NexuzyAI — Complete Setup Guide (v6)
 
 ---
 
-## ⚠️ IMPORTANT: mlc4j is NOT a downloadable AAR
+## ⚠️ THE REAL WAY mlc4j WORKS
 
-The previous instructions were wrong. `mlc4j-release.aar` does **not exist** as a
-downloadable file. MLC-LLM provides `mlc4j` as a **local Android library module** that
-must be copied and built. There is only one release on GitHub (v0.1.dev0 from 2023)
-with no assets.
+After fully reading `mlc-ai/mlc-llm/android/MLCChat/settings.gradle`:
 
-The official MLC-LLM Android app uses:
 ```gradle
-implementation project(":mlc4j")   // local module
+// Official MLCChat settings.gradle:
+include ':mlc4j'
+project(':mlc4j').projectDir = file('dist/lib/mlc4j')
 ```
-not an AAR file.
+
+**mlc4j lives in `dist/lib/mlc4j`** — a folder that is **generated** by
+running `python3 -m mlc_llm package`. It is not in the GitHub repo
+(listed in `.gitignore`). It is NOT a downloadable AAR.
 
 ---
 
-## Step 1: Set up mlc4j (Required for Qwen 3B)
+## Step 1 — Enable Qwen3 (MLC-LLM)
 
-### Option A — Using prepare_libs.py (Easiest — downloads prebuilt .so)
+### The Correct Method
 
 ```bash
-# From your development machine (Windows PowerShell or Linux/Mac terminal)
+# 1. Install MLC-LLM Python package
+#    (Use Linux/Mac or WSL on Windows — Windows native is NOT supported)
+pip install mlc-llm
 
-# 1. Clone MLC-LLM repo
-git clone --recursive https://github.com/mlc-ai/mlc-llm.git
+# Verify install:
+python3 -c "import mlc_llm; print('MLC ready')"
 
-# 2. Copy mlc4j into NexuzyAI-Android project root
-cp -r mlc-llm/android/mlc4j  NexuzyAI-Android/mlc4j
+# 2. mlc-package-config.json is already in your project root
+#    It targets Qwen3-1.7B and Qwen3-0.6B for Android
 
-# 3. Download prebuilt native libs (arm64-v8a .so files)
-cd NexuzyAI-Android/mlc4j
-python3 prepare_libs.py
-# This downloads libtvm_runtime.so, libmlc_llm.so, libmlc_llm_jni.so
+# 3. Run the packager from NexuzyAI-Android project root:
+python3 -m mlc_llm package
+
+# This will:
+#   a. Download/compile Qwen3-1.7B model library (.so) for arm64-v8a
+#   b. Download model weights from HuggingFace (~1.5GB)
+#   c. Generate dist/lib/mlc4j    ← Android module
+#   d. Generate dist/bundle/      ← compiled weights
+# Takes ~10-30 mins on first run
 
 # 4. In settings.gradle, uncomment:
-#    include ':mlc4j'
+#      include ':mlc4j'
+#      project(':mlc4j').projectDir = file('dist/lib/mlc4j')
 
 # 5. In app/build.gradle, uncomment:
-#    implementation project(':mlc4j')
+#      implementation project(':mlc4j')
 
 # 6. In MLCEngineWrapper.kt:
-#    Set:        const val MLC_AVAILABLE = true
-#    Uncomment:  import ai.mlc.mlcllm.MLCEngine
-#    Uncomment:  import ai.mlc.mlcllm.OpenAIProtocol
-#    Uncomment:  import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
-#    Uncomment all engine.* lines in the generate() and loadModel() functions
+#    - Set:       const val MLC_AVAILABLE = true
+#    - Uncomment: import ai.mlc.mlcllm.MLCEngine
+#    - Uncomment: import ai.mlc.mlcllm.OpenAIProtocol
+#    - Uncomment: import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
+#    - Uncomment: all engine.* lines inside loadModel() and generate()
+
+# 7. Build and run in Android Studio
 ```
 
-### Option B — Build from Source (Full control)
+### Windows Users (WSL Required)
 
-```bash
-# Requirements: NDK r26b+, CMake 3.24+, Python 3.10+, TVM nightly
-pip install mlc-llm  # installs MLC Python package
-cd mlc-llm
-python3 cmake/gen_cmake_config.py  # generates build config
-# Then build via Android Studio or command line with NDK
+```powershell
+# MLC-LLM Python build ONLY works on Linux/Mac.
+# On Windows, use WSL2:
+wsl --install
+# Then inside WSL:
+pip install mlc-llm
+python3 -m mlc_llm package
+# The generated dist/ folder works on both WSL and Windows Android Studio
 ```
 
-### Option C — Use llama.cpp instead (Simpler, GGUF support)
+### Lightweight Alternative: llama.cpp GGUF
 
-If MLC-LLM setup is too complex, use llama.cpp Android JNI:
+If MLC setup is too heavy, use `llama.cpp` with GGUF model files.
+No Python compilation needed:
 
 ```bash
+# Download GGUF model directly:
+# https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF
+# File: Qwen2-1.5B-Instruct-Q4_K_M.gguf (~1GB)
+
+# Build llama.cpp Android JNI:
 git clone https://github.com/ggerganov/llama.cpp
 cd llama.cpp
-# Build for Android (arm64):
 mkdir build-android && cd build-android
-cmake .. -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
-         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 \
+cmake .. -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
+         -DANDROID_ABI=arm64-v8a \
+         -DANDROID_PLATFORM=android-26 \
          -DLLAMA_ANDROID_JNI=ON
-make -j4
-# Copy libllama.so to NexuzyAI-Android/app/src/main/jniLibs/arm64-v8a/
-```
-
-Model (GGUF format — no compile needed):
-```
-https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF
-File: Qwen2-1.5B-Instruct-Q4_K_M.gguf  (~1GB)
+make -j$(nproc)
+# Copy libllama.so to app/src/main/jniLibs/arm64-v8a/
 ```
 
 ---
 
-## Step 2: Download Qwen 3B Model Weights
+## Step 2 — Google Maps API Key
 
-### Auto-download (app does this on first launch if MLC enabled)
-The app auto-downloads from HuggingFace:
-```
-https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
-```
-
-### Manual push via ADB (faster)
-```bash
-git lfs install
-git clone https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
-
-adb push Qwen2-1.5B-Instruct-q4f16_1-MLC \
-    /sdcard/Android/data/ai.nexuzy.assistant/files/Qwen2-1.5B-Instruct-q4f16_1-MLC
-```
-
----
-
-## Step 3: Google Maps API Key
-
-1. Go to [https://console.cloud.google.com](https://console.cloud.google.com)
-2. Create project → Enable **Maps SDK for Android** + **Geocoding API**
-3. Create API Key → restrict to package: `ai.nexuzy.assistant`
-4. Add to `local.properties`:
+1. [console.cloud.google.com](https://console.cloud.google.com)
+2. Enable: **Maps SDK for Android** + **Geocoding API**
+3. Create API key → restrict to package `ai.nexuzy.assistant`
+4. `local.properties`:
    ```
-   MAPS_API_KEY=AIzaSy_YOUR_KEY_HERE
+   MAPS_API_KEY=AIzaSy_YOUR_KEY
    ```
 
 ---
 
-## Step 4: News (Google RSS — Already Works, No Key)
+## Step 3 — News (Google RSS, No Key Needed ✅)
 
-Google News RSS is **already working with zero setup**:
+Google News RSS works with zero setup:
 ```
 https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en
 ```
-Optional NewsAPI key (100 req/day free):
-1. Register at [https://newsapi.org/register](https://newsapi.org/register)
-2. Add to `local.properties`:  `NEWS_API_KEY=your_key`
+Optional NewsAPI (100 req/day free): [newsapi.org/register](https://newsapi.org/register)
+```
+NEWS_API_KEY=your_key  (in local.properties)
+```
 
 ---
 
-## Step 5: AdMob Ads
+## Step 4 — AdMob
 
-1. Go to [https://admob.google.com](https://admob.google.com)
-2. Add App → Android → Get **App ID** + create **Banner Ad Unit**
-3. Add to `local.properties`:
+1. [admob.google.com](https://admob.google.com) → Add app → Banner ad unit
+2. `local.properties`:
    ```
    ADMOB_APP_ID=ca-app-pub-XXXX~XXXX
    ADMOB_BANNER_ID=ca-app-pub-XXXX/XXXX
    ```
-> Test ads work immediately with default test IDs — no setup needed to test.
+> Test IDs already set — ads show immediately without real keys.
 
 ---
 
-## Step 6: Voice (Works Out of Box ✅)
+## Step 5 — Voice (Zero Setup ✅)
 
-- **STT**: Android native SpeechRecognizer (en-IN) — no setup
-- **TTS**: Android native TextToSpeech (en-IN) — no setup
-- Partial results appear live in the input box
-- Voice orb pulses with mic volume
+- **STT**: Android native `SpeechRecognizer` (`en-IN`)
+- **TTS**: Android native `TextToSpeech` (`en-IN`)
+- Partial speech shown live in input box
+- Voice orb pulses with mic volume via `onRmsChanged()`
 
 ---
 
-## App Works Without MLC Right Now
+## App Works Right Now ✅
 
-Even without Qwen 3B loaded, the app is **fully functional**:
-- 🌦️ Weather (Open-Meteo, no key)
-- 📰 News (Google RSS, no key)
-- 📍 Location (GPS → city name)
-- 📱 Device control (alarms, flashlight, media, open apps)
-- 🎙️ Voice input/output
-- 📮 AdMob ads (test mode)
-
-The fallback response shows the tool result directly until Qwen 3B is loaded.
+Without Qwen3, these work fully:
+| Feature | How |
+|---|---|
+| 🌦️ Weather | Open-Meteo API, no key |
+| 📰 News | Google RSS, no key |
+| 📍 Location | GPS → city via Geocoder |
+| 📱 Device control | Alarms, flashlight, media, apps |
+| 🎙️ Voice | SpeechRecognizer + TTS |
+| 📮 AdMob | Test mode, no key |
