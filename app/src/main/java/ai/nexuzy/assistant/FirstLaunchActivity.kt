@@ -21,31 +21,46 @@ import ai.nexuzy.assistant.tools.NetworkUtils
 /**
  * FirstLaunchActivity — shown ONCE on first install.
  *
- * Decision tree (checked in this exact order):
+ * Decision tree:
  *
- *  ┌─────────────────────────────────────────────────────────────────┐
- *  │ 1a. MLC downloaded + internet ON                                 │
- *  │     → "🌟 Best mode: MLC + Sarvaam + DuckDuckGo"              │
- *  │     → All three engines active simultaneously                   │
- *  │     → Auto-go to chat in 2s                                    │
- *  ├─────────────────────────────────────────────────────────────────┤
- *  │ 1b. MLC downloaded + internet OFF                                │
- *  │     → "✅ Full offline AI ready"                                 │
- *  │     → Auto-go to chat in 2s                                    │
- *  ├─────────────────────────────────────────────────────────────────┤
- *  │ 2.  No MLC + internet ON                                         │
- *  │     → Auto-download MLC in background                           │
- *  │     → Skip → use Sarvaam AI online                             │
- *  ├─────────────────────────────────────────────────────────────────┤
- *  │ 3.  No MLC + NO internet                                         │
- *  │     → Honest limited-mode warning                               │
- *  └─────────────────────────────────────────────────────────────────┘
+ *  1a. MLC downloaded + Internet ON
+ *      → BEST MODE: MLC + Sarvaam AI + DuckDuckGo all active
+ *      → Device control always available
+ *      → Auto-go to chat in 2s
+ *
+ *  1b. MLC downloaded + NO Internet
+ *      → Full offline AI ready
+ *      → Device control always available
+ *      → Auto-go to chat in 2s
+ *
+ *  2.  No MLC + Internet ON
+ *      → Auto-download MLC in background
+ *      → Device control available while downloading
+ *      → Skip → use Sarvaam AI online
+ *
+ *  3.  No MLC + NO Internet
+ *      → Limited mode: basic NLP + device control
+ *      → Device control STILL works — always offline
+ *
+ * Device control features (ALWAYS available, no internet, no MLC needed):
+ *   ⏰ Set alarms     🔦 Flashlight on/off    🎵 Media play/pause/next
+ *   🔊 Volume control  🚀 Open any app         📍 GPS location
+ *   🎙️ Voice input     ⏱️ Stopwatch/timer
  */
 class FirstLaunchActivity : AppCompatActivity() {
 
     companion object {
         private const val PREFS_NAME = "nexuzy_prefs"
         private const val KEY_FIRST  = "first_launch_done"
+
+        // These features work in EVERY case — no internet, no MLC needed
+        private const val ALWAYS_AVAILABLE =
+            "
+
+📱 Always available (no internet, no AI needed):\n" +
+            "⏰ Set alarms · 🔦 Flashlight · 🎵 Media control\n" +
+            "🔊 Volume · 🚀 Open any app · 📍 GPS location\n" +
+            "🎙️ Voice input · ⏱️ Timers · 🕒 Date & time"
     }
 
     private lateinit var modelManager: ModelManager
@@ -108,21 +123,21 @@ class FirstLaunchActivity : AppCompatActivity() {
         btnAction.visibility   = View.VISIBLE
 
         when {
-            // ══ CASE 1a: MLC downloaded + Internet ON → BEST MODE ═════════════════════
+
+            // ══ CASE 1a: MLC downloaded + Internet ON → BEST MODE ══════════════
             mlcDownloaded && hasInternet -> {
-                tvInternetBadge.text = "🌟 Best Mode: MLC + Sarvaam AI + DuckDuckGo all active"
+                tvInternetBadge.text = "🌟 Best Mode: MLC + Sarvaam AI + DuckDuckGo"
                 tvInternetBadge.setTextColor(
                     ContextCompat.getColor(this, android.R.color.holo_green_dark))
 
                 tvStatus.text =
                     "🌟 You have the BEST possible setup!\n\n" +
-                    "All three AI engines are active simultaneously:\n" +
-                    "🧠 MLC on-device model — private, offline-capable\n" +
-                    "🌐 Sarvaam AI — cloud intelligence\n" +
-                    "🦆 DuckDuckGo — real-time web grounding\n\n" +
-                    "✅ Works offline (MLC) AND online (Sarvaam + DDG)\n" +
-                    "✅ Best answer quality: all sources fused together\n" +
-                    "✅ Live weather, news, web search available"
+                    "✅ MLC on-device model — private, fast\n" +
+                    "✅ Sarvaam AI — cloud intelligence\n" +
+                    "✅ DuckDuckGo — real-time web grounding\n" +
+                    "✅ Live weather, news, web search\n" +
+                    "✅ Works offline too (MLC handles it)" +
+                    ALWAYS_AVAILABLE
 
                 tvModelInfo.text =
                     "Model: ${recommended.displayName} ✅ Ready\n" +
@@ -132,25 +147,21 @@ class FirstLaunchActivity : AppCompatActivity() {
                 btnAction.visibility = View.GONE
                 btnSkip.text         = "🚀 Start NexuzyAI (Best Mode)"
                 btnSkip.setOnClickListener { finishSetup() }
-
-                // Auto-proceed in 2s
                 btnSkip.postDelayed({ finishSetup() }, 2000)
             }
 
-            // ══ CASE 1b: MLC downloaded + NO Internet → FULL OFFLINE AI ═════════
+            // ══ CASE 1b: MLC downloaded + NO Internet → FULL OFFLINE AI ══════
             mlcDownloaded && !hasInternet -> {
-                tvInternetBadge.text = "🟢 AI Model: Downloaded — Full offline AI ready"
+                tvInternetBadge.text = "🟢 AI Model Ready — Full offline mode"
                 tvInternetBadge.setTextColor(
                     ContextCompat.getColor(this, android.R.color.holo_green_dark))
 
                 tvStatus.text =
                     "✅ Full offline AI ready!\n\n" +
-                    "NexuzyAI works 100% offline — no internet needed:\n" +
                     "✅ Full AI conversations — any question, any topic\n" +
-                    "✅ Date, time, math, identity\n" +
-                    "✅ Device control (alarms, flashlight, media)\n" +
-                    "✅ GPS location\n\n" +
-                    "🌐 Connect internet anytime for live weather, news & web search."
+                    "✅ 100% private — zero data sent anywhere\n" +
+                    "❌ Weather / news / web search (need internet)" +
+                    ALWAYS_AVAILABLE
 
                 tvModelInfo.text =
                     "Model: ${recommended.displayName} ✅ Ready\n" +
@@ -160,23 +171,21 @@ class FirstLaunchActivity : AppCompatActivity() {
                 btnAction.visibility = View.GONE
                 btnSkip.text         = "▶️ Start NexuzyAI"
                 btnSkip.setOnClickListener { finishSetup() }
-
-                // Auto-proceed in 2s
                 btnSkip.postDelayed({ finishSetup() }, 2000)
             }
 
-            // ══ CASE 2: No MLC + Internet ON → AUTO-DOWNLOAD ═══════════════
+            // ══ CASE 2: No MLC + Internet ON → AUTO-DOWNLOAD ══════════════
             !mlcDownloaded && hasInternet -> {
-                tvInternetBadge.text = "🟢 Internet: Connected — downloading AI model automatically"
+                tvInternetBadge.text = "🟢 Internet: Connected — downloading AI model…"
                 tvInternetBadge.setTextColor(
                     ContextCompat.getColor(this, android.R.color.holo_green_dark))
 
                 tvStatus.text =
                     "🚀 Setting up your AI assistant…\n\n" +
                     "⬇️ Downloading AI model ($sizeStr) — ONE TIME only.\n" +
-                    "After this, NexuzyAI works FULLY OFFLINE forever.\n" +
-                    "No internet needed ever again for AI chat.\n\n" +
-                    "ℹ️ Cannot bundle in APK ($sizeStr > 100 MB limit)."
+                    "After this, NexuzyAI works FULLY OFFLINE forever.\n\n" +
+                    "ℹ️ Cannot bundle in APK ($sizeStr > 100 MB Play limit)." +
+                    ALWAYS_AVAILABLE
 
                 tvModelInfo.text =
                     "Model: ${recommended.displayName}\n" +
@@ -208,7 +217,7 @@ class FirstLaunchActivity : AppCompatActivity() {
                 startDownload(recommended)
             }
 
-            // ══ CASE 3: No MLC + NO Internet → HONEST LIMITED WARNING ══════
+            // ══ CASE 3: No MLC + NO Internet → LIMITED (but device control works!) ═
             else -> {
                 tvInternetBadge.text = "🔴 No Internet — AI model not yet downloaded"
                 tvInternetBadge.setTextColor(
@@ -216,13 +225,11 @@ class FirstLaunchActivity : AppCompatActivity() {
 
                 tvStatus.text =
                     "⚠️ No internet AND AI model not downloaded yet.\n\n" +
-                    "Available right now:\n" +
-                    "✅ Greetings, date/time, math, identity\n" +
-                    "✅ Device control (alarms, flashlight, media)\n" +
-                    "✅ GPS location (coordinates)\n\n" +
                     "❌ Real AI conversations (need MLC model)\n" +
-                    "   Download once → works offline forever\n\n" +
-                    "💡 Connect Wi-Fi → reopen app → auto-downloads."
+                    "   Connect Wi-Fi → reopen app → auto-downloads\n" +
+                    "   Download once → full offline AI forever.\n\n" +
+                    "✅ Basic NLP: greetings, date/time, math, identity" +
+                    ALWAYS_AVAILABLE
 
                 tvModelInfo.text =
                     "Model needed: ${recommended.displayName} ($sizeStr)\n" +
@@ -232,7 +239,7 @@ class FirstLaunchActivity : AppCompatActivity() {
                 btnAction.text      = "❌ Cannot Download — No Internet"
                 btnAction.isEnabled = false
 
-                btnSkip.text = "▶️ Start Basic Mode (Download AI Later)"
+                btnSkip.text = "▶️ Start (Device Control + Basic Mode)"
                 btnSkip.setOnClickListener { finishSetup() }
             }
         }
@@ -258,7 +265,7 @@ class FirstLaunchActivity : AppCompatActivity() {
                     runOnUiThread {
                         isDownloading        = false
                         progressBar.progress = 100
-                        tvProgress.text      = "✅ Done! Full offline AI enabled."
+                        tvProgress.text      = "✅ Done! Full offline AI + device control enabled."
                         Toast.makeText(this@FirstLaunchActivity,
                             "✅ Download complete! NexuzyAI now works 100% offline.",
                             Toast.LENGTH_LONG).show()
@@ -271,7 +278,7 @@ class FirstLaunchActivity : AppCompatActivity() {
                         if (error == "Download cancelled") return@runOnUiThread
                         tvProgress.text = "⚠️ Download failed: $error"
                         Toast.makeText(this@FirstLaunchActivity,
-                            "⚠️ Download failed. Starting with online AI mode.",
+                            "⚠️ Download failed. Starting with online AI + device control.",
                             Toast.LENGTH_LONG).show()
                         finishSetup()
                     }
