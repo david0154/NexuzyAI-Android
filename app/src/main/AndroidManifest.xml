@@ -19,11 +19,6 @@
         android:theme="@style/Theme.DavidAI"
         android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true">
-        <!--
-            android:enableOnBackInvokedCallback="true"
-            Enables Android 16 (API 36) predictive back gesture system-wide.
-            All activities use OnBackPressedDispatcher instead of onBackPressed().
-        -->
 
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -33,6 +28,7 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="${MAPS_API_KEY}" />
 
+        <!-- LAUNCHER -->
         <activity
             android:name=".SplashActivity"
             android:exported="true"
@@ -45,17 +41,23 @@
             </intent-filter>
         </activity>
 
+        <!--
+            First-launch setup screen.
+            Shown ONCE on first install.
+            App works fully offline — MLC model download is optional.
+        -->
+        <activity
+            android:name=".FirstLaunchActivity"
+            android:exported="false"
+            android:screenOrientation="portrait"
+            android:windowLayoutInDisplayCutoutMode="shortEdges" />
+
         <activity
             android:name=".ChatActivity"
             android:exported="false"
             android:screenOrientation="portrait"
             android:windowSoftInputMode="adjustResize"
             android:windowLayoutInDisplayCutoutMode="shortEdges" />
-        <!--
-            android:windowLayoutInDisplayCutoutMode="shortEdges"
-            Allows content to draw into display cutout areas (notch/punch-hole)
-            on Android 15+ devices without being blocked by a black bar.
-        -->
 
         <activity
             android:name=".AboutActivity"
