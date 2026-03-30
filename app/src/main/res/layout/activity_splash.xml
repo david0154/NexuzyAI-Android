@@ -6,16 +6,29 @@
     android:layout_height="match_parent"
     android:background="@color/colorBackground">
 
+    <!-- Logo -->
+    <ImageView
+        android:id="@+id/splashLogo"
+        android:layout_width="96dp"
+        android:layout_height="96dp"
+        android:src="@drawable/ic_nexuzy_logo"
+        android:contentDescription="NexuzyAI logo"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/splashTitle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginBottom="16dp" />
+
     <TextView
         android:id="@+id/splashTitle"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="NexuzyAI"
-        android:textSize="44sp"
+        android:textSize="40sp"
         android:textStyle="bold"
         android:textColor="@color/colorPrimary"
         android:fontFamily="sans-serif-light"
-        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/splashLogo"
         app:layout_constraintBottom_toTopOf="@id/splashSub"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -24,13 +37,25 @@
         android:id="@+id/splashSub"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Powered by Qwen 3B · On-Device AI"
+        android:text="Powered by Qwen3 · On-Device AI"
         android:textSize="13sp"
         android:textColor="@color/colorHint"
         app:layout_constraintTop_toBottomOf="@id/splashTitle"
+        app:layout_constraintBottom_toTopOf="@id/splashCredit"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="6dp" />
+
+    <TextView
+        android:id="@+id/splashCredit"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="by David · Nexuzy Lab"
+        android:textSize="11sp"
+        android:textColor="@color/colorHint"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="8dp" />
+        android:layout_marginBottom="32dp" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

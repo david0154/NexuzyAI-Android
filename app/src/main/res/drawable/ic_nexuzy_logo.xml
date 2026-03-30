@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  NexuzyAI Logo — Stylised "N" with neural spark
+  Used as app icon, splash screen, and About page
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Background circle -->
+    <path
+        android:fillColor="#1A73E8"
+        android:pathData="M54,54 m-54,0 a54,54 0 1,0 108,0 a54,54 0 1,0 -108,0" />
+
+    <!-- Inner glow ring -->
+    <path
+        android:fillColor="#22FFFFFF"
+        android:pathData="M54,54 m-42,0 a42,42 0 1,0 84,0 a42,42 0 1,0 -84,0" />
+
+    <!-- Letter N -->
+    <path
+        android:strokeWidth="5"
+        android:strokeColor="#FFFFFF"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000"
+        android:pathData="M32,72 L32,36 L54,66 L76,36 L76,72" />
+
+    <!-- Neural spark dot top -->
+    <path
+        android:fillColor="#80E8FFFF"
+        android:pathData="M54,24 m-4,0 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+
+    <!-- Neural spark dot bottom -->
+    <path
+        android:fillColor="#80E8FFFF"
+        android:pathData="M54,84 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0" />
+
+    <!-- Spark line vertical -->
+    <path
+        android:strokeWidth="1.5"
+        android:strokeColor="#60FFFFFF"
+        android:fillColor="#00000000"
+        android:pathData="M54,28 L54,34 M54,74 L54,80" />
+
+</vector>

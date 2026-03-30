@@ -62,34 +62,41 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setupEngineObserver()
         requestPermissions()
 
-        addAIMessage("👋 Hi David! I'm NexuzyAI — Qwen 3B on-device.\nTry: \"What's the weather?\" or \"Open YouTube\"")
+        addAIMessage("👋 Hi! I'm NexuzyAI \u2014 Qwen3 on-device assistant.\nTry: \"What's the weather?\" or \"Latest news\" or \"Open YouTube\"")
 
         binding.sendBtn.setOnClickListener {
             val text = binding.messageInput.text?.toString()?.trim() ?: ""
             if (text.isNotEmpty()) { binding.messageInput.setText(""); processInput(text) }
         }
         binding.voiceBtn.setOnClickListener { toggleVoice() }
-        binding.clearBtn.setOnClickListener { qwenEngine.resetHistory(); messages.clear(); chatAdapter.notifyDataSetChanged() }
+        binding.clearBtn.setOnClickListener {
+            qwenEngine.resetHistory(); messages.clear(); chatAdapter.notifyDataSetChanged()
+            addAIMessage("👋 Chat cleared! Ask me anything.")
+        }
+        binding.aboutBtn.setOnClickListener {
+            startActivity(Intent(this, AboutActivity::class.java))
+        }
     }
 
     private fun setupEngineObserver() {
         qwenEngine.onStateChange = { state ->
             val label = when (state) {
-                MLCEngineWrapper.EngineState.LOADING -> "Loading Qwen 3B..."
-                MLCEngineWrapper.EngineState.READY -> "Qwen 3B • Ready"
-                MLCEngineWrapper.EngineState.GENERATING -> "Generating..."
-                MLCEngineWrapper.EngineState.FAILED -> "Model Failed"
-                MLCEngineWrapper.EngineState.NOT_LOADED -> "Model Not Loaded"
+                MLCEngineWrapper.EngineState.LOADING    -> "⏳ Loading Qwen3…"
+                MLCEngineWrapper.EngineState.READY      -> "Qwen3 • Ready"
+                MLCEngineWrapper.EngineState.GENERATING -> "⚙️ Generating…"
+                MLCEngineWrapper.EngineState.FAILED     -> "❌ Model Failed"
+                MLCEngineWrapper.EngineState.NOT_LOADED -> "Qwen3 (setup needed)"
             }
-            binding.modelBadge.text = label
+            runOnUiThread { binding.modelBadge.text = label }
         }
         qwenEngine.onTokenStream = { token ->
-            // Stream tokens into last message as they arrive
-            if (messages.isNotEmpty() && !messages.last().isUser) {
-                val last = messages.last()
-                messages[messages.size - 1] = last.copy(text = last.text + token)
-                chatAdapter.notifyItemChanged(messages.size - 1)
-                binding.chatRecyclerView.scrollToPosition(messages.size - 1)
+            runOnUiThread {
+                if (messages.isNotEmpty() && !messages.last().isUser) {
+                    val last = messages.last()
+                    messages[messages.size - 1] = last.copy(text = last.text + token)
+                    chatAdapter.notifyItemChanged(messages.size - 1)
+                    binding.chatRecyclerView.scrollToPosition(messages.size - 1)
+                }
             }
         }
     }
@@ -120,10 +127,8 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 val toolResult = toolExecutor.execute(intent, userInput)
                 val locationHint = locationTool.getLocationSystemPrompt()
                 val prompt = PromptBuilder.build(userInput, toolResult, locationHint)
-                // Add empty AI bubble for streaming
                 addAIMessage("")
                 val response = qwenEngine.generate(prompt)
-                // Update final response (also handles non-streaming fallback)
                 if (messages.isNotEmpty() && !messages.last().isUser) {
                     messages[messages.size - 1] = messages.last().copy(text = response)
                     chatAdapter.notifyItemChanged(messages.size - 1)
@@ -155,7 +160,6 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding.typingIndicator.visibility = if (show) View.VISIBLE else View.GONE
     }
 
-    // ─── STT ───────────────────────────────────────────────────────────────
     private fun setupSTT() {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -164,15 +168,12 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 isListening = false; updateVoiceBtn(false)
                 if (text.isNotEmpty()) { binding.messageInput.setText(""); processInput(text) }
             }
-            override fun onError(error: Int) {
-                isListening = false; updateVoiceBtn(false)
-                Toast.makeText(this@ChatActivity, "Voice error $error. Check mic permission.", Toast.LENGTH_SHORT).show()
-            }
+            override fun onError(error: Int) { isListening = false; updateVoiceBtn(false) }
             override fun onReadyForSpeech(p: Bundle?) { binding.voiceOrb.visibility = View.VISIBLE }
             override fun onBeginningOfSpeech() {}
             override fun onRmsChanged(rms: Float) {
-                val scale = 1f + (rms.coerceIn(0f, 10f) / 20f)
-                binding.voiceOrb.scaleX = scale; binding.voiceOrb.scaleY = scale
+                val s = 1f + (rms.coerceIn(0f, 10f) / 20f)
+                binding.voiceOrb.scaleX = s; binding.voiceOrb.scaleY = s
             }
             override fun onBufferReceived(b: ByteArray?) {}
             override fun onEndOfSpeech() { binding.voiceOrb.visibility = View.GONE }
@@ -185,7 +186,6 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
     }
 
     private fun setupTTS() { tts = TextToSpeech(this, this) }
-
     override fun onInit(status: Int) {
         if (status == TextToSpeech.SUCCESS) { tts?.language = Locale("en", "IN"); ttsReady = true }
     }
@@ -202,19 +202,20 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
             })
         } else {
-            isListening = false; updateVoiceBtn(false)
-            speechRecognizer?.stopListening()
+            isListening = false; updateVoiceBtn(false); speechRecognizer?.stopListening()
         }
     }
 
     private fun updateVoiceBtn(listening: Boolean) {
         binding.voiceBtn.setIconResource(
-            if (listening) android.R.drawable.ic_media_pause else android.R.drawable.ic_btn_speak_now
+            if (listening) android.R.drawable.ic_media_pause
+            else android.R.drawable.ic_btn_speak_now
         )
     }
 
     private fun requestPermissions() {
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.ACCESS_FINE_LOCATION), 101)
+        ActivityCompat.requestPermissions(this,
+            arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.ACCESS_FINE_LOCATION), 101)
     }
 
     override fun onDestroy() { super.onDestroy(); tts?.shutdown(); speechRecognizer?.destroy(); adView?.destroy(); qwenEngine.unload() }
