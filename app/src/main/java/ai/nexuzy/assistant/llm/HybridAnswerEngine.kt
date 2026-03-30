@@ -7,18 +7,13 @@ import ai.nexuzy.assistant.tools.NetworkUtils
 import kotlinx.coroutines.*
 
 /**
- * HybridAnswerEngine — combines Local MLC + Sarvaam AI + DuckDuckGo
- * into ONE fused accurate answer when internet is available.
+ * HybridAnswerEngine — smart routing engine:
  *
- * Strategy when internet ON:
- *   1. Fire DuckDuckGo search + Sarvaam AI call IN PARALLEL (async)
- *   2. Merge web facts as grounding context into the Sarvaam prompt
- *   3. If local MLC is available, also run it and pick best answer
- *      (Sarvaam preferred for factual; MLC for personality/identity)
- *   4. Return the richest combined answer
+ *  INTERNET ON  →  DuckDuckGo + Sarvaam AI run IN PARALLEL → fused answer
+ *                   (MLC result also merged in if available)
  *
- * Strategy when internet OFF:
- *   → Falls back to local MLC only, then offline fallback
+ *  INTERNET OFF →  LocalOfflineEngine (MLC if built, else smart rule-based NLP)
+ *                   → NEVER returns an empty or useless message
  */
 class HybridAnswerEngine(
     private val context: Context,
@@ -28,33 +23,39 @@ class HybridAnswerEngine(
         private const val TAG = "HybridAnswerEngine"
     }
 
-    private val searchTool = InternetSearchTool()
+    private val searchTool    = InternetSearchTool()
+    private val offlineEngine = LocalOfflineEngine(context)
 
-    /**
-     * Generate a fused answer from all available sources.
-     *
-     * @param userQuery     Raw user question
-     * @param toolContext   Any tool result already fetched (weather/news/location/link)
-     * @param history       Conversation history (user, assistant) pairs
-     * @param mlcResult     Result from local MLC model, null if not available
-     * @return              Final fused answer string
-     */
     suspend fun generate(
         userQuery: String,
         toolContext: String = "",
         history: List<Pair<String, String>> = emptyList(),
-        mlcResult: String? = null
+        mlcResult: String? = null,
+        fullPrompt: String = ""
     ): String = withContext(Dispatchers.IO) {
 
         val hasInternet = NetworkUtils.isInternetAvailable(context)
 
-        // --- OFFLINE: just use MLC or fallback ---
+        // ══ OFFLINE PATH ══════════════════════════════════════════
         if (!hasInternet) {
-            return@withContext mlcResult
-                ?: "\uD83D\uDCA1 Offline mode. Connect to internet for enhanced AI responses."
+            Log.d(TAG, "Offline mode — using LocalOfflineEngine")
+            // If MLC already generated a result, prefer it
+            return@withContext if (!mlcResult.isNullOrBlank()) {
+                Log.d(TAG, "Offline: returning MLC result")
+                mlcResult
+            } else {
+                // Use smart offline engine (rule-based NLP + tool context)
+                Log.d(TAG, "Offline: using LocalOfflineEngine rule-based NLP")
+                offlineEngine.generate(
+                    userQuery   = userQuery,
+                    toolContext = toolContext,
+                    prompt      = fullPrompt
+                )
+            }
         }
 
-        // --- ONLINE: run DuckDuckGo + Sarvaam in parallel ---
+        // ══ ONLINE PATH ══════════════════════════════════════════
+        // Fire DuckDuckGo search async (non-blocking)
         val webFactsDeferred: Deferred<String?> = async {
             try {
                 val result = searchTool.search(userQuery)
@@ -66,89 +67,74 @@ class HybridAnswerEngine(
             }
         }
 
-        // Build an enriched prompt combining tool context + web facts + user query
-        // We first get webFacts to inject into Sarvaam prompt for grounding
+        // Wait for web facts, then inject into Sarvaam prompt for grounding
         val webFacts = webFactsDeferred.await()
 
-        // Build the combined prompt for Sarvaam AI
+        // Build grounded combined prompt
         val combinedPrompt = buildCombinedPrompt(
-            userQuery = userQuery,
+            userQuery   = userQuery,
             toolContext = toolContext,
-            webFacts = webFacts
+            webFacts    = webFacts
         )
 
-        // Call Sarvaam AI with the enriched prompt
-        val sarvaamAnswer: String? = if (sarvaamClient != null) {
+        // Call Sarvaam AI with grounded prompt
+        val sarvaamAnswer: String? = sarvaamClient?.let {
             try {
-                sarvaamClient.generate(combinedPrompt, history)
+                it.generate(combinedPrompt, history)
             } catch (e: Exception) {
                 Log.w(TAG, "Sarvaam failed: ${e.message}")
                 null
             }
-        } else null
+        }
 
-        // Fusion logic: pick the best available answer
-        return@withContext when {
-            // Sarvaam gave an answer (grounded with web facts) — best option
+        // Fusion: best available answer
+        when {
             !sarvaamAnswer.isNullOrBlank() -> {
-                Log.d(TAG, "Using Sarvaam AI answer (grounded with DuckDuckGo)")
+                Log.d(TAG, "Online: Sarvaam AI answer (grounded with DuckDuckGo)")
                 sarvaamAnswer
             }
-            // Sarvaam unavailable but web facts exist — synthesize from web facts
             !webFacts.isNullOrBlank() -> {
-                Log.d(TAG, "Sarvaam unavailable, using DuckDuckGo web facts")
+                Log.d(TAG, "Online: DuckDuckGo web facts synthesis")
                 synthesizeFromWebFacts(userQuery, webFacts)
             }
-            // MLC local model answer
             !mlcResult.isNullOrBlank() -> {
-                Log.d(TAG, "Using local MLC answer")
+                Log.d(TAG, "Online: using MLC result (Sarvaam + DDG unavailable)")
                 mlcResult
             }
-            // Nothing worked
-            else -> "\uD83D\uDCA1 I couldn't find a confident answer. Please check your internet connection or try rephrasing."
+            else -> {
+                // Internet on but all sources failed — still use offline engine
+                Log.w(TAG, "All online sources failed, falling back to LocalOfflineEngine")
+                offlineEngine.generate(userQuery, toolContext, fullPrompt)
+            }
         }
     }
 
-    /**
-     * Builds a combined prompt that injects web facts and tool context
-     * directly into the question sent to Sarvaam AI for grounded answers.
-     */
     private fun buildCombinedPrompt(
         userQuery: String,
         toolContext: String,
         webFacts: String?
     ): String = buildString {
-        // If tool data available (weather, news, location, link) — include it
         if (toolContext.isNotBlank()) {
             appendLine("[Real-time data from tools]:")
             appendLine(toolContext.trim())
             appendLine()
         }
-        // If DuckDuckGo found relevant facts — include them as grounding
         if (!webFacts.isNullOrBlank()) {
-            appendLine("[Web facts from DuckDuckGo for grounding — use to improve accuracy]:")
+            appendLine("[Web facts from DuckDuckGo — use to improve accuracy]:")
             appendLine(webFacts.trim())
             appendLine()
         }
-        // The actual user question
         appendLine("[User question]: $userQuery")
         appendLine()
         append("Answer clearly and accurately using all the above context. " +
-            "If you are not confident, say so. Keep the response concise and helpful.")
+               "If you are not confident, say so. Keep the response concise and helpful.")
     }
 
-    /**
-     * When Sarvaam is unavailable, synthesize a clean response
-     * directly from DuckDuckGo web facts.
-     */
-    private fun synthesizeFromWebFacts(query: String, facts: String): String {
-        return buildString {
-            appendLine("\uD83C\uDF10 Based on web search results:")
-            appendLine()
-            // Clean up the raw DuckDuckGo text for display
-            facts.lines().take(6).forEach { line ->
-                if (line.isNotBlank()) appendLine(line.trim())
-            }
-        }.trim()
-    }
+    private fun synthesizeFromWebFacts(query: String, facts: String): String = buildString {
+        appendLine("🌐 Based on web search results:")
+        appendLine()
+        facts.lines().take(6).forEach { line ->
+            if (line.isNotBlank()) appendLine(line.trim())
+        }
+    }.trim()
 }

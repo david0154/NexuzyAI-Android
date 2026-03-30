@@ -7,20 +7,18 @@ package ai.nexuzy.assistant.llm
 //  License: Apache 2.0
 // ============================================================
 //
-//  GENERATION STRATEGY (internet ON):
+//  ROUTING LOGIC:
 //
-//    DuckDuckGo search  ──┐
-//                          ├──► HybridAnswerEngine ──► Fused Answer
-//    Sarvaam AI API     ──┘          ▲
-//    Local MLC model ────────────────┘  (also fused if available)
-//
-//  GENERATION STRATEGY (internet OFF):
-//    Local MLC model  ──► Offline fallback message
-//
-//  HOW mlc4j IS GENERATED:
-//    pip install mlc-llm
-//    python3 -m mlc_llm package
-//    → dist/lib/mlc4j  (uncomment settings.gradle + build.gradle imports)
+//  ┌─────────────────────────────────────────────────────────────────────┐
+//  │  INTERNET ON                                               │
+//  │  DuckDuckGo search  ──┬─► HybridAnswerEngine ► fused ans  │
+//  │  Sarvaam AI API     ──┤          ▲                        │
+//  │  Local MLC result  ──┘          └────────────────────     │
+//  ├─────────────────────────────────────────────────────────────────────┤
+//  │  INTERNET OFF                                              │
+//  │  Local MLC model (if built) ► LocalOfflineEngine (NLP)     │
+//  │  → ALWAYS gives a real answer, never silent               │
+//  └─────────────────────────────────────────────────────────────────────┘
 // ============================================================
 
 import android.content.Context
@@ -46,24 +44,21 @@ class MLCEngineWrapper(private val context: Context) {
         const val TAG = "MLCEngineWrapper"
     }
 
-    // Uncomment after setup:
     // private val engine = MLCEngine()
 
-    private val executor = Executors.newSingleThreadExecutor()
-    private val scope    = CoroutineScope(Dispatchers.Main + Job())
-    private val appDirFile = context.getExternalFilesDir("") ?: context.filesDir
+    private val executor    = Executors.newSingleThreadExecutor()
+    private val scope       = CoroutineScope(Dispatchers.Main + Job())
+    private val appDirFile  = context.getExternalFilesDir("") ?: context.filesDir
 
     var onStateChange: ((EngineState) -> Unit)? = null
     var onTokenStream: ((String) -> Unit)? = null
     private var currentState = EngineState.NOT_LOADED
 
-    // Sarvaam AI client
     private val sarvaamClient: SarvaamAIClient? by lazy {
         val key = try { BuildConfig.SARVAAM_API_KEY } catch (_: Exception) { "" }
         if (key.isNotBlank()) SarvaamAIClient(key) else null
     }
 
-    // HybridAnswerEngine: combines MLC + Sarvaam + DuckDuckGo
     private val hybridEngine: HybridAnswerEngine by lazy {
         HybridAnswerEngine(context, sarvaamClient)
     }
@@ -87,20 +82,12 @@ class MLCEngineWrapper(private val context: Context) {
     }
 
     /**
-     * Generate a response.
+     * Main generate function.
      *
-     * When internet is ON:
-     *   → HybridAnswerEngine runs DuckDuckGo + Sarvaam AI in parallel,
-     *     fuses the results with local MLC output (if available) for the
-     *     most accurate possible answer.
-     *
-     * When internet is OFF:
-     *   → Local MLC only (if loaded), else offline fallback.
-     *
-     * @param prompt      Full prompt string (from PromptBuilder, includes tool context)
-     * @param userQuery   Raw user question (for DuckDuckGo search grounding)
-     * @param toolContext Tool result already fetched (weather/news/location/link)
-     * @param history     Conversation history
+     * @param prompt      Full Qwen3 chat-template prompt (from PromptBuilder)
+     * @param userQuery   Raw user question (extracted if blank)
+     * @param toolContext Tool result fetched before this call
+     * @param history     Conversation history pairs
      */
     suspend fun generate(
         prompt: String,
@@ -109,20 +96,24 @@ class MLCEngineWrapper(private val context: Context) {
         history: List<Pair<String, String>> = emptyList()
     ): String = withContext(Dispatchers.IO) {
 
-        // --- Try local MLC model first ---
+        // Extract raw user query from prompt if not provided separately
+        val effectiveQuery = userQuery.ifBlank { extractUserQuery(prompt) }
+
+        // ─ Step 1: Try local MLC model (when built) ────────────────────
         var mlcResult: String? = null
         if (MLC_AVAILABLE && currentState == EngineState.READY) {
             setState(EngineState.GENERATING)
             val sb = StringBuilder()
             try {
                 // val messages = buildMessages(history, prompt)
-                // val responses = engine.chat.completions.create(messages, stream_options=...)
-                // for (res in responses) { res.choices.forEach { choice ->
-                //     choice.delta.content?.asText()?.let { token ->
-                //         sb.append(token)
-                //         scope.launch { onTokenStream?.invoke(token) }
+                // engine.chat.completions.create(messages, ...).forEach { res ->
+                //     res.choices.forEach { choice ->
+                //         choice.delta.content?.asText()?.let { token ->
+                //             sb.append(token)
+                //             scope.launch { onTokenStream?.invoke(token) }
+                //         }
                 //     }
-                // }}
+                // }
                 mlcResult = sb.toString().takeIf { it.isNotBlank() }
             } catch (e: Exception) {
                 Log.e(TAG, "MLC error: ${e.message}")
@@ -131,22 +122,22 @@ class MLCEngineWrapper(private val context: Context) {
             }
         }
 
-        // --- Hand off to HybridAnswerEngine when internet available,
-        //     OR just return MLC result when offline ---
-        val effectiveQuery = userQuery.ifBlank { extractUserQuery(prompt) }
+        // ─ Step 2: Route to HybridAnswerEngine ────────────────────────
+        //   • If internet ON  → DuckDuckGo + Sarvaam fused answer
+        //   • If internet OFF → MLC result OR LocalOfflineEngine NLP
         val finalAnswer = hybridEngine.generate(
             userQuery   = effectiveQuery,
             toolContext = toolContext,
             history     = history,
-            mlcResult   = mlcResult
+            mlcResult   = mlcResult,
+            fullPrompt  = prompt
         )
 
-        // Stream the final answer token by token for smooth UI
+        // ─ Step 3: Stream final answer token by token for smooth UI ─
         if (finalAnswer.isNotBlank()) {
-            val words = finalAnswer.split(" ")
-            for (word in words) {
+            finalAnswer.split(" ").forEach { word ->
                 scope.launch { onTokenStream?.invoke("$word ") }
-                delay(18)
+                delay(16)
             }
         }
 
@@ -194,12 +185,12 @@ class MLCEngineWrapper(private val context: Context) {
     private fun setState(s: EngineState) { currentState = s; onStateChange?.invoke(s) }
     fun getState() = currentState
 
-    /** Extract the last user message from the prompt string */
+    /** Extract user message from Qwen3 chat template prompt */
     private fun extractUserQuery(prompt: String): String {
         val lines = prompt.lines()
-        val userIdx = lines.indexOfLast { it.trim() == "<|im_start|>user" }
-        return if (userIdx >= 0 && userIdx + 1 < lines.size)
-            lines.drop(userIdx + 1)
+        val idx   = lines.indexOfLast { it.trim() == "<|im_start|>user" }
+        return if (idx >= 0 && idx + 1 < lines.size)
+            lines.drop(idx + 1)
                 .takeWhile { it.trim() != "<|im_end|>" }
                 .joinToString(" ")
                 .trim()
