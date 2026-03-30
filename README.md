@@ -1,12 +1,12 @@
-<!-- David AI README -->
+<!-- NexuzyAI README -->
 <p align="center">
-  <img src="https://raw.githubusercontent.com/david0154/NexuzyAI-Android/main/app/src/main/res/drawable/ic_nexuzy_logo.xml" width="88" alt="David AI Logo" />
+  <img src="https://raw.githubusercontent.com/david0154/NexuzyAI-Android/main/app/src/main/res/drawable/ic_nexuzy_logo.xml" width="88" alt="NexuzyAI Logo" />
 </p>
 
 <h1 align="center">NexuzyAI</h1>
 <p align="center">
   <b>On-Device + Cloud-Hybrid AI Assistant for Android</b><br/>
-  Device-adaptive model tiers · 100% private offline · Voice + Text · MLC-LLM + Sarvaam AI + DuckDuckGo
+  Offline-first · MLC-LLM + Sarvaam AI + DuckDuckGo · Voice + Text · Zero data collection
 </p>
 
 <p align="center">
@@ -14,31 +14,33 @@
   <a href="https://github.com/david0154/NexuzyAI-Android/blob/main/PRIVACY_POLICY.md"><img src="https://img.shields.io/badge/Privacy-No%20Data%20Collected-green.svg" /></a>
   <img src="https://img.shields.io/badge/Android-API%2026%2B-brightgreen.svg" />
   <img src="https://img.shields.io/badge/Kotlin-2.0-purple.svg" />
-  <img src="https://img.shields.io/badge/Model-Device--Adaptive-orange.svg" />
-  <img src="https://img.shields.io/badge/AI-Offline%20%2B%20Cloud-blueviolet.svg" />
+  <img src="https://img.shields.io/badge/AI-Offline%20%2B%20Cloud%20Hybrid-blueviolet.svg" />
+  <a href="SETUP_GUIDE.md"><img src="https://img.shields.io/badge/Setup-Full%20Guide-orange.svg" /></a>
 </p>
 
 ---
 
-## 🧠 AI Generation Priority Chain
-
-NexuzyAI uses a smart layered AI strategy based on what's available:
+## 🧠 AI Engine Routing
 
 ```
-1. 🔒 Local MLC Model   — On-device Qwen3/Gemma (if mlc4j built)
-        ↓ if not available
-2. 🌐 Sarvaam AI API    — Cloud AI for accuracy (when internet ON + key set)
-        ↓ if no key / fails
-3. 🦆 DuckDuckGo Search — Real-time facts injected into AI context
-        ↓ always available
-4. 💡 Offline Fallback  — Tool result or guidance message
+┌────────────────────────────────────────────────────┐
+│  INTERNET ON                                      │
+│  DuckDuckGo ──┬─► HybridAnswerEngine ► answer   │
+│  Sarvaam AI ──┤          ▲                       │
+│  Local MLC  ──┘ (fused when available)           │
+├────────────────────────────────────────────────────┤
+│  INTERNET OFF                                     │
+│  MLC model (if built) ► LocalOfflineEngine NLP    │
+│  Handles: greetings, date/time, math, identity    │
+│  → ALWAYS gives a real answer, never silent      │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🧠 Model Tiers
 
-NexuzyAI automatically selects the best model based on your device RAM:
+NexuzyAI automatically selects the best model based on device RAM:
 
 | Display Name | Backend Model | RAM Required | Size | Best For |
 |---|---|---|---|---|
@@ -52,85 +54,54 @@ Tap the model badge in the top bar to manually choose a different tier.
 
 ## ✨ Features
 
-| Feature | Details |
-|---|---|
-| 🧠 On-Device AI | Runs 100% on-device via MLC-LLM. Zero cloud dependency |
-| 🌐 Sarvaam AI API | When internet is ON + key set: uses Sarvaam AI for accurate cloud responses |
-| 🦆 DuckDuckGo Search | Auto-searches DuckDuckGo when AI doesn't know something (internet required) |
-| 🔗 Link Reader | Paste any URL — AI fetches + reads + summarizes the page content |
-| 📡 Internet-Gated Tools | Weather, News, Location (city name), Web Search gracefully require internet |
-| 📱 Device-Adaptive | Auto-selects David AI Lite / 1B / 2B based on device RAM |
-| 🎙️ Voice + Text | Both input modes work for all features and commands |
-| 🌦️ Weather | Real-time via Open-Meteo (internet required) |
-| 📰 News | Google News RSS headlines (internet required) |
-| 📍 Location-aware | GPS works offline; city name via Geocoder (internet required) |
-| 🗺️ Google Maps SDK | Maps SDK for Android + Geocoding API integrated |
-| 📱 Device Control | Alarms, flashlight, media, open apps — all offline |
-| 👨‍💻 Developer Info | Ask "Who made you?" — AI knows its own identity |
-| 📮 AdMob Ads | Google AdMob banner (test IDs included) |
-| 🌙 Day / Night Theme | Follows system setting |
-| 🔒 Zero Data Collection | No servers. No tracking. Fully private. |
-
----
-
-## 🗣️ What You Can Ask (Voice or Text)
-
-```
-"What's the weather today?"          → Live weather (internet required)
-"Latest news"                        → Top headlines (internet required)
-"Where am I?"                        → GPS city name (city needs internet)
-"Set alarm at 7 AM"                  → Opens Android alarm
-"Turn on flashlight"                 → Torch control
-"Play music" / "Next song"           → Media key dispatch
-"Open YouTube"                       → Launches app
-"Who made you?"                      → Developer info (David, Nexuzy Lab)
-"What model are you?"                → Shows David AI tier + RAM info
-"What can you do?"                   → Feature overview
-"Search for latest AI news"          → DuckDuckGo web search
-"Summarize https://example.com"      → Reads + summarizes any URL
-"Look up Python decorators"          → DuckDuckGo instant answer
-Anything else                        → Local AI → Sarvaam AI → DuckDuckGo
-```
-
----
-
-## 🌐 Internet vs Offline Behaviour
-
-| Feature | Internet OFF | Internet ON |
+| Feature | Internet | Details |
 |---|---|---|
-| AI Chat | ✅ Local MLC model | ✅ Local → Sarvaam AI (if key set) |
-| Weather | ❌ Shows offline message | ✅ Live Open-Meteo data |
-| News | ❌ Shows offline message | ✅ Google News RSS |
-| Location (GPS) | ✅ Lat/Lon available | ✅ Full city name via Geocoder |
-| Web Search | ❌ Not available | ✅ DuckDuckGo Instant Answers |
-| Link Reader | ❌ Cannot fetch URL | ✅ Reads + summarizes any link |
-| Unknown AI answers | 💡 Offline fallback | 🦆 DuckDuckGo context injected |
+| 🧠 On-Device AI | ❌ Offline | MLC-LLM — 100% private, zero cloud |
+| 🌐 Sarvaam AI API | ✅ Online | Cloud AI for accurate answers |
+| 🦆 DuckDuckGo Search | ✅ Online | Grounding context for AI answers |
+| 🔗 Link Reader | ✅ Online | Paste URL — AI reads & summarizes |
+| 💡 LocalOfflineEngine | ❌ Offline | Smart NLP: date, math, greetings, identity |
+| 🌦️ Weather | ✅ Online | Real-time via Open-Meteo |
+| 📰 News | ✅ Online | Google News RSS + NewsAPI |
+| 📍 Location | Both | GPS offline; city name online |
+| 🗺️ Google Maps SDK | ✅ Online | Maps + Geocoding API |
+| 📱 Device Control | ❌ Offline | Alarms, flashlight, media, app launch |
+| 🎙️ Voice + Text | Both | Both input modes for all features |
+| 📋 Copy / Paste | ❌ Offline | Long-press bubble to copy any message |
+| 🔒 Zero Data | ❌ Offline | No servers, no tracking |
 
 ---
 
-## 🛠️ Tech Stack
+## 🗣️ What You Can Ask
 
-| Layer | Technology |
-|---|---|
-| Language | Kotlin 2.0 |
-| UI | Android Views + XML (ConstraintLayout, CardView, RecyclerView) |
-| AI Runtime | [MLC-LLM](https://github.com/mlc-ai/mlc-llm) (`mlc4j` module) |
-| AI Models | Qwen3-0.6B (Lite) · Qwen3-1.7B (1B) · Gemma-2-2B (2B) |
-| Cloud AI | [Sarvaam AI API](https://sarvam.ai) (optional, internet-gated) |
-| Web Search | [DuckDuckGo Instant Answer API](https://api.duckduckgo.com) (no key needed) |
-| Link Reader | OkHttp + HTML text extractor (any public URL) |
-| Internet Check | `NetworkUtils` — `NetworkCapabilities.NET_CAPABILITY_VALIDATED` |
-| Model Selection | `ModelManager.kt` — `ActivityManager.MemoryInfo.totalMem` |
-| Voice STT | Android `SpeechRecognizer` |
-| Voice TTS | Android `TextToSpeech` |
-| Weather | [Open-Meteo API](https://open-meteo.com) (free, no key) |
-| News | Google News RSS |
-| Location | `FusedLocationProviderClient` + `Geocoder` |
-| Maps | Google Maps SDK for Android + Geocoding API |
-| Ads | Google AdMob |
-| Networking | OkHttp 4 + Retrofit 2 |
-| Min SDK | Android 8.0 (API 26) |
-| Target SDK | Android 14 (API 34) |
+```
+"What's the weather today?"         → Live weather (internet)
+"Latest news"                        → Top headlines (internet)
+"Where am I?"                        → GPS + city name
+"Set alarm at 7 AM"                  → Android alarm
+"Turn on flashlight"                 → Torch control
+"Open YouTube"                       → Launches app
+"Search for AI news"                 → DuckDuckGo search
+"Summarize https://example.com"      → Reads URL content
+"What is 56 * 8?"                    → Math (works offline)
+"What time is it?"                   → Device time (works offline)
+"Who made you?"                      → Developer info (works offline)
+```
+
+---
+
+## 🌐 Internet vs Offline
+
+| Feature | Offline | Online |
+|---|---|---|
+| AI Chat | ✅ LocalOfflineEngine NLP | ✅ Sarvaam + DuckDuckGo fused |
+| Weather | ❌ Offline message | ✅ Open-Meteo live |
+| News | ❌ Offline message | ✅ RSS + NewsAPI |
+| Location | ✅ GPS coords | ✅ Full city name |
+| Web Search | ❌ Not available | ✅ DuckDuckGo |
+| Link Reader | ❌ Cannot fetch | ✅ OkHttp + HTML strip |
+| Date / Time | ✅ Device clock | ✅ Device clock |
+| Math | ✅ Built-in solver | ✅ Built-in solver |
 
 ---
 
@@ -140,45 +111,47 @@ Anything else                        → Local AI → Sarvaam AI → DuckDuckGo
 git clone https://github.com/david0154/NexuzyAI-Android.git
 cd NexuzyAI-Android
 cp local.properties.example local.properties
-# Edit local.properties with your API keys
-# Open in Android Studio → Build → Run
+# Fill in your API keys in local.properties
+# Open in Android Studio → Sync → Run
 ```
 
-> **Works immediately** without MLC build. Weather, news, voice, web search, link reader, and device control all function out of the box (with internet for online features).
+> 📚 **Full setup instructions**: See **[SETUP_GUIDE.md](SETUP_GUIDE.md)** — covers Android Studio,
+> API platforms, icon/logo replacement, keystore generation, SHA keys, and release APK signing.
 
 ---
 
-## 🔑 API Keys Setup
+## 🔑 API Keys Summary
 
-Copy `local.properties.example` → `local.properties` and fill in:
-
-```properties
-# Google Maps SDK for Android + Geocoding API
-# Enable both at: https://console.cloud.google.com
-MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
-
-# News headlines — https://newsapi.org (free)
-NEWS_API_KEY=YOUR_NEWS_API_KEY_HERE
-
-# Sarvaam AI — cloud AI when internet is on (optional)
-# Get at: https://sarvam.ai
-# Leave blank to use DuckDuckGo context only
-SARVAAM_API_KEY=YOUR_SARVAAM_API_KEY_HERE
-```
-
-> `local.properties` is git-ignored and never committed.
+| Key | Required | Where to get |
+|---|---|---|
+| `MAPS_API_KEY` | ✅ Yes | [console.cloud.google.com](https://console.cloud.google.com) — enable Maps SDK + Geocoding API |
+| `NEWS_API_KEY` | ❌ Optional | [newsapi.org](https://newsapi.org) — free 100 req/day |
+| `SARVAAM_API_KEY` | ❌ Optional | [sarvam.ai](https://sarvam.ai) — cloud AI accuracy |
 
 ---
 
-## 🧠 Enable On-Device AI (MLC-LLM)
+## 🛠️ Tech Stack
 
-```bash
-pip install mlc-llm
-python3 -m mlc_llm package   # reads mlc-package-config.json
-# Then uncomment 3 lines in settings.gradle + app/build.gradle
-# Set MLC_AVAILABLE = true in MLCEngineWrapper.kt
-```
-See **[SETUP_GUIDE.md](SETUP_GUIDE.md)** for full instructions.
+| Layer | Technology |
+|---|---|
+| Language | Kotlin 2.0 |
+| UI | Android Views + XML |
+| On-Device AI | [MLC-LLM](https://github.com/mlc-ai/mlc-llm) (`mlc4j`) |
+| AI Models | Qwen3-0.6B / Qwen3-1.7B / Gemma-2-2B |
+| Cloud AI | [Sarvaam AI API](https://sarvam.ai) |
+| Web Search | [DuckDuckGo Instant Answer API](https://api.duckduckgo.com) |
+| Offline NLP | `LocalOfflineEngine` (built-in rule-based) |
+| Hybrid Engine | `HybridAnswerEngine` (parallel async fusion) |
+| Internet Check | `NetworkUtils.isInternetAvailable()` |
+| Voice STT | Android `SpeechRecognizer` |
+| Voice TTS | Android `TextToSpeech` |
+| Weather | [Open-Meteo API](https://open-meteo.com) |
+| News | Google News RSS + NewsAPI |
+| Location | `FusedLocationProviderClient` + `Geocoder` |
+| Maps | Google Maps SDK + Geocoding API |
+| Networking | OkHttp 4 + Retrofit 2 |
+| Min SDK | Android 8.0 (API 26) |
+| Target SDK | Android 14 (API 34) |
 
 ---
 
@@ -186,35 +159,26 @@ See **[SETUP_GUIDE.md](SETUP_GUIDE.md)** for full instructions.
 
 ```
 app/src/main/java/ai/nexuzy/assistant/
-├── ChatActivity.kt                      # Main chat screen (voice + text unified)
-├── AboutActivity.kt                     # About + privacy + GitHub
-├── PrivacyPolicyActivity.kt             # Full privacy policy
-├── SplashActivity.kt                    # Splash screen with logo
-├── NexuzyApp.kt                         # Application class
+├── ChatActivity.kt
 ├── llm/
-│   ├── ModelManager.kt                  # RAM detection + model tier selection
-│   ├── QwenEngine.kt                    # High-level AI engine interface
-│   ├── MLCEngineWrapper.kt              # MLC + Sarvaam AI fallback chain
-│   ├── SarvaamAIClient.kt               # NEW: Sarvaam AI cloud API client
-│   └── PromptBuilder.kt                 # Qwen3 chat-template prompt builder
+│   ├── HybridAnswerEngine.kt    # Online: DuckDuckGo + Sarvaam fused
+│   ├── LocalOfflineEngine.kt    # Offline: rule-based NLP (date/math/identity)
+│   ├── MLCEngineWrapper.kt      # Orchestrates MLC + routing
+│   ├── SarvaamAIClient.kt       # Sarvaam cloud AI
+│   ├── QwenEngine.kt            # High-level AI interface
+│   ├── ModelManager.kt          # RAM → model tier selection
+│   └── PromptBuilder.kt         # Qwen3 chat template builder
 ├── middleware/
-│   ├── IntentClassifier.kt              # Keyword intent detection (offline)
-│   └── ToolExecutor.kt                  # Execute tools, internet-gated
-├── tools/
-│   ├── NetworkUtils.kt                  # NEW: Internet connectivity checker
-│   ├── InternetSearchTool.kt            # NEW: DuckDuckGo Instant Answer search
-│   ├── LinkReaderTool.kt                # NEW: URL fetcher + HTML text extractor
-│   ├── WeatherTool.kt                   # Open-Meteo weather (internet required)
-│   ├── NewsTool.kt                      # Google News RSS (internet required)
-│   ├── LocationTool.kt                  # GPS + Geocoder
-│   └── DeviceControlTool.kt             # Flashlight, media, alarm, app launch
-├── services/
-│   ├── AssistantService.kt              # Background assistant service
-│   ├── AssistantAccessibilityService.kt # Accessibility integration
-│   └── NotificationListenerService.kt  # Notification awareness
-└── ui/
-    ├── ModelSelectorFragment.kt         # Bottom sheet model picker
-    └── adapter/ChatAdapter.kt           # RecyclerView chat bubbles
+│   ├── IntentClassifier.kt      # Keyword intent detection
+│   └── ToolExecutor.kt          # Tool runner (internet-gated)
+└── tools/
+    ├── NetworkUtils.kt          # Internet check
+    ├── InternetSearchTool.kt    # DuckDuckGo search
+    ├── LinkReaderTool.kt        # URL reader
+    ├── WeatherTool.kt
+    ├── NewsTool.kt
+    ├── LocationTool.kt
+    └── DeviceControlTool.kt
 ```
 
 ---
@@ -227,7 +191,7 @@ See **[CONTRIBUTING.md](CONTRIBUTING.md)**
 
 ## 🔒 Privacy
 
-NexuzyAI collects **zero data**. On-device AI runs fully locally. When Sarvaam AI is used (optional, internet-gated), only your query is sent to the API — no personal data, no history stored. See **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)**
+NexuzyAI collects **zero data**. On-device AI runs fully locally. Sarvaam AI is optional — only your query is sent when used. See **[PRIVACY_POLICY.md](PRIVACY_POLICY.md)**
 
 ---
 
