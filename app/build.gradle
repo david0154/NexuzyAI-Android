@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace 'ai.david.ai'
+    namespace 'ai.nexuzy.assistant'
     compileSdk 35
 
     defaultConfig {
-        applicationId "ai.david.ai"
+        applicationId "ai.nexuzy.assistant"
         minSdk 26
         targetSdk 34
         versionCode 9
