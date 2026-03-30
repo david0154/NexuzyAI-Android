@@ -10,8 +10,30 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // JitPack for compose-markdown and other libs
+        maven { url 'https://jitpack.io' }
     }
 }
 
 rootProject.name = "NexuzyAI"
 include ':app'
+
+// -----------------------------------------------------------
+// TO ENABLE MLC-LLM (Qwen 3B):
+//
+// 1. Clone mlc-ai/mlc-llm repo:
+//    git clone https://github.com/mlc-ai/mlc-llm.git
+//
+// 2. Copy the mlc4j module into this project:
+//    cp -r mlc-llm/android/mlc4j ./mlc4j
+//
+// 3. Uncomment the line below:
+// include ':mlc4j'
+//
+// 4. In app/build.gradle change:
+//    // implementation project(':mlc4j')
+//    to:
+//    implementation project(':mlc4j')
+//
+// 5. Run prepare_libs.py first (see SETUP_GUIDE.md)
+// -----------------------------------------------------------

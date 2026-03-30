@@ -1,106 +1,161 @@
-# NexuzyAI Setup Guide
+# NexuzyAI — Complete Setup Guide
 
-## 1. Qwen 3B Model (On-Device LLM)
+---
 
-### Option A — MLC-LLM (Recommended)
+## ⚠️ IMPORTANT: mlc4j is NOT a downloadable AAR
+
+The previous instructions were wrong. `mlc4j-release.aar` does **not exist** as a
+downloadable file. MLC-LLM provides `mlc4j` as a **local Android library module** that
+must be copied and built. There is only one release on GitHub (v0.1.dev0 from 2023)
+with no assets.
+
+The official MLC-LLM Android app uses:
+```gradle
+implementation project(":mlc4j")   // local module
+```
+not an AAR file.
+
+---
+
+## Step 1: Set up mlc4j (Required for Qwen 3B)
+
+### Option A — Using prepare_libs.py (Easiest — downloads prebuilt .so)
+
 ```bash
-# Install MLC-LLM
-pip install mlc-llm
+# From your development machine (Windows PowerShell or Linux/Mac terminal)
 
-# Download pre-compiled Qwen2-1.5B for Android (Qwen "3B" class)
-# From HuggingFace:
-https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
+# 1. Clone MLC-LLM repo
+git clone --recursive https://github.com/mlc-ai/mlc-llm.git
 
-# Place model files in:
-app/src/main/assets/qwen3b/
+# 2. Copy mlc4j into NexuzyAI-Android project root
+cp -r mlc-llm/android/mlc4j  NexuzyAI-Android/mlc4j
 
-# Place mlc4j-release.aar in:
-app/libs/
+# 3. Download prebuilt native libs (arm64-v8a .so files)
+cd NexuzyAI-Android/mlc4j
+python3 prepare_libs.py
+# This downloads libtvm_runtime.so, libmlc_llm.so, libmlc_llm_jni.so
 
-# Uncomment in app/build.gradle:
-implementation files('libs/mlc4j-release.aar')
+# 4. In settings.gradle, uncomment:
+#    include ':mlc4j'
 
-# Uncomment in QwenEngine.kt lines:
-// engine = ai.mlc.mlcllm.MLCEngine()
-// engine?.load(...)
+# 5. In app/build.gradle, uncomment:
+#    implementation project(':mlc4j')
+
+# 6. In MLCEngineWrapper.kt:
+#    Set:        const val MLC_AVAILABLE = true
+#    Uncomment:  import ai.mlc.mlcllm.MLCEngine
+#    Uncomment:  import ai.mlc.mlcllm.OpenAIProtocol
+#    Uncomment:  import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
+#    Uncomment all engine.* lines in the generate() and loadModel() functions
 ```
 
-### Option B — llama.cpp (GGUF)
-```bash
-# Download:
-https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF
-# File: Qwen2-1.5B-Instruct-Q4_K_M.gguf
+### Option B — Build from Source (Full control)
 
-# Android JNI binding:
-https://github.com/ggerganov/llama.cpp/tree/master/examples/llama.android
+```bash
+# Requirements: NDK r26b+, CMake 3.24+, Python 3.10+, TVM nightly
+pip install mlc-llm  # installs MLC Python package
+cd mlc-llm
+python3 cmake/gen_cmake_config.py  # generates build config
+# Then build via Android Studio or command line with NDK
+```
+
+### Option C — Use llama.cpp instead (Simpler, GGUF support)
+
+If MLC-LLM setup is too complex, use llama.cpp Android JNI:
+
+```bash
+git clone https://github.com/ggerganov/llama.cpp
+cd llama.cpp
+# Build for Android (arm64):
+mkdir build-android && cd build-android
+cmake .. -DCMAKE_TOOLCHAIN_FILE=$NDK/build/cmake/android.toolchain.cmake \
+         -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-26 \
+         -DLLAMA_ANDROID_JNI=ON
+make -j4
+# Copy libllama.so to NexuzyAI-Android/app/src/main/jniLibs/arm64-v8a/
+```
+
+Model (GGUF format — no compile needed):
+```
+https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF
+File: Qwen2-1.5B-Instruct-Q4_K_M.gguf  (~1GB)
 ```
 
 ---
 
-## 2. Google Maps API Key
+## Step 2: Download Qwen 3B Model Weights
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+### Auto-download (app does this on first launch if MLC enabled)
+The app auto-downloads from HuggingFace:
+```
+https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
+```
+
+### Manual push via ADB (faster)
+```bash
+git lfs install
+git clone https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
+
+adb push Qwen2-1.5B-Instruct-q4f16_1-MLC \
+    /sdcard/Android/data/ai.nexuzy.assistant/files/Qwen2-1.5B-Instruct-q4f16_1-MLC
+```
+
+---
+
+## Step 3: Google Maps API Key
+
+1. Go to [https://console.cloud.google.com](https://console.cloud.google.com)
 2. Create project → Enable **Maps SDK for Android** + **Geocoding API**
-3. Create API Key → restrict to package `ai.nexuzy.assistant`
+3. Create API Key → restrict to package: `ai.nexuzy.assistant`
 4. Add to `local.properties`:
    ```
-   MAPS_API_KEY=AIzaSy...
+   MAPS_API_KEY=AIzaSy_YOUR_KEY_HERE
    ```
-
-> Used for: reverse geocoding GPS → city name in AI responses
 
 ---
 
-## 3. Google News RSS (No Key Needed ✅)
+## Step 4: News (Google RSS — Already Works, No Key)
 
-Already wired in `NewsTool.kt`. Works out of the box:
+Google News RSS is **already working with zero setup**:
 ```
 https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en
 ```
-For topic-specific news, the app calls:
-```
-https://news.google.com/rss/search?q=TOPIC&hl=en-IN
-```
+Optional NewsAPI key (100 req/day free):
+1. Register at [https://newsapi.org/register](https://newsapi.org/register)
+2. Add to `local.properties`:  `NEWS_API_KEY=your_key`
 
 ---
 
-## 4. NewsAPI (Optional)
+## Step 5: AdMob Ads
 
-1. Register free at [newsapi.org](https://newsapi.org/register)
-2. Add to `local.properties`:
-   ```
-   NEWS_API_KEY=your_key
-   ```
-> Without this key, app automatically falls back to Google News RSS.
-
----
-
-## 5. AdMob Ads
-
-1. Go to [admob.google.com](https://admob.google.com/)
-2. Add App → Android → Get **App ID** and create **Banner Ad Unit**
+1. Go to [https://admob.google.com](https://admob.google.com)
+2. Add App → Android → Get **App ID** + create **Banner Ad Unit**
 3. Add to `local.properties`:
    ```
    ADMOB_APP_ID=ca-app-pub-XXXX~XXXX
    ADMOB_BANNER_ID=ca-app-pub-XXXX/XXXX
    ```
-> Test ads work immediately with the default test IDs in `build.gradle`.
+> Test ads work immediately with default test IDs — no setup needed to test.
 
 ---
 
-## 6. Voice (Works Out of Box ✅)
+## Step 6: Voice (Works Out of Box ✅)
 
-- **STT**: Uses Android's built-in `SpeechRecognizer` (no setup needed)
-- **TTS**: Uses Android's built-in `TextToSpeech` in `en-IN` locale
-- Partial results appear in real-time in the input field as you speak
-- Voice orb animates based on microphone volume level
-
-> For offline voice: replace `VoiceInputManager.kt` with [Vosk Android](https://alphacephei.com/vosk/android)
+- **STT**: Android native SpeechRecognizer (en-IN) — no setup
+- **TTS**: Android native TextToSpeech (en-IN) — no setup
+- Partial results appear live in the input box
+- Voice orb pulses with mic volume
 
 ---
 
-## 7. Device Control & Accessibility
+## App Works Without MLC Right Now
 
-Enable manually on device:
-- **Accessibility**: Settings → Accessibility → NexuzyAI → Enable
-- **Notification Access**: Settings → Notifications → Notification Access → NexuzyAI
+Even without Qwen 3B loaded, the app is **fully functional**:
+- 🌦️ Weather (Open-Meteo, no key)
+- 📰 News (Google RSS, no key)
+- 📍 Location (GPS → city name)
+- 📱 Device control (alarms, flashlight, media, open apps)
+- 🎙️ Voice input/output
+- 📮 AdMob ads (test mode)
+
+The fallback response shows the tool result directly until Qwen 3B is loaded.

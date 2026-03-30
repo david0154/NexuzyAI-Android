@@ -11,8 +11,8 @@ android {
         applicationId "ai.nexuzy.assistant"
         minSdk 26
         targetSdk 34
-        versionCode 3
-        versionName "3.0"
+        versionCode 4
+        versionName "4.0"
 
         buildConfigField "String", "NEWS_API_KEY",    '"' + (project.findProperty('NEWS_API_KEY')    ?: '') + '"'
         buildConfigField "String", "MAPS_API_KEY",    '"' + (project.findProperty('MAPS_API_KEY')    ?: '') + '"'
@@ -33,10 +33,12 @@ android {
 
     packagingOptions {
         jniLibs { useLegacyPackaging = true }
+        resources { excludes += '/META-INF/{AL2.0,LGPL2.1}' }
     }
 }
 
 dependencies {
+    // Core Android
     implementation 'androidx.core:core-ktx:1.12.0'
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.11.0'
@@ -62,13 +64,30 @@ dependencies {
     // AdMob
     implementation 'com.google.android.gms:play-services-ads:23.1.0'
 
-    // Lottie
+    // Lottie animations
     implementation 'com.airbnb.android:lottie:6.4.0'
 
-    // -----------------------------------------------------------
-    // MLC-LLM (mlc4j) - copied from mlc-ai/mlc-llm/android
-    // Place mlc4j-release.aar in app/libs/ to enable Qwen3B
-    // Download from: https://github.com/mlc-ai/mlc-llm/releases
-    // -----------------------------------------------------------
-    // implementation files('libs/mlc4j-release.aar')
+    // ============================================================
+    // MLC-LLM (mlc4j) — LOCAL MODULE
+    // ============================================================
+    // mlc4j is NOT available as a downloadable AAR.
+    // It is a local Android library module that you must build.
+    //
+    // Step 1: Clone mlc-ai/mlc-llm alongside this project:
+    //   git clone https://github.com/mlc-ai/mlc-llm
+    //
+    // Step 2: Copy the module:
+    //   cp -r mlc-llm/android/mlc4j  NexuzyAI-Android/mlc4j
+    //
+    // Step 3: Run prepare_libs.py (downloads prebuilt .so libs):
+    //   cd mlc4j && python3 prepare_libs.py
+    //
+    // Step 4: In settings.gradle uncomment:  include ':mlc4j'
+    //
+    // Step 5: Uncomment this line:
+    // implementation project(':mlc4j')
+    //
+    // Step 6: In MLCEngineWrapper.kt set MLC_AVAILABLE = true
+    //         and uncomment the 3 import lines
+    // ============================================================
 }
