@@ -1,7 +1,9 @@
 package ai.nexuzy.assistant.middleware
 
+import ai.nexuzy.assistant.tools.LinkReaderTool
+
 /**
- * IntentClassifier — pure keyword-based intent detection.
+ * IntentClassifier — keyword-based intent detection.
  * Works 100% offline, no model needed.
  */
 object IntentClassifier {
@@ -10,6 +12,8 @@ object IntentClassifier {
         WEATHER, NEWS, LOCATION, ALARM, FLASHLIGHT_ON, FLASHLIGHT_OFF,
         MEDIA_PLAY, MEDIA_PAUSE, MEDIA_NEXT, OPEN_APP,
         DEVELOPER_INFO, ABOUT_APP, MODEL_INFO,
+        LINK_READ,    // User shared a URL
+        WEB_SEARCH,   // Explicit search request
         GENERAL
     }
 
@@ -19,8 +23,8 @@ object IntentClassifier {
             "cloudy", "hot", "cold", "mausam", "barish", "garmi", "sardi"
         ),
         Intent.NEWS to listOf(
-            "news", "headline", "latest", "today\'s news", "breaking",
-            "what\'s happening", "current events", "khabar"
+            "news", "headline", "latest", "today's news", "breaking",
+            "what's happening", "current events", "khabar"
         ),
         Intent.LOCATION to listOf(
             "where am i", "my location", "current location", "where are we",
@@ -61,11 +65,19 @@ object IntentClassifier {
         Intent.MODEL_INFO to listOf(
             "which model", "what model are you", "your model", "ai model",
             "which version", "model version", "what version"
+        ),
+        Intent.WEB_SEARCH to listOf(
+            "search for", "search about", "look up", "google", "find info about",
+            "search online", "web search", "internet search"
         )
     )
 
     fun classify(input: String): Intent {
         val lower = input.lowercase().trim()
+
+        // Check for URL first — always treat as LINK_READ
+        if (LinkReaderTool.extractUrl(input) != null) return Intent.LINK_READ
+
         for ((intent, keywords) in patterns) {
             if (keywords.any { lower.contains(it) }) return intent
         }

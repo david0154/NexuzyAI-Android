@@ -1,24 +1,33 @@
-# ─── Copy this file to local.properties (never commit that file) ──────────────
+## ─────────────────────────────────────────────────────────
+## NexuzyAI-Android  —  local.properties template
+## Copy this file to local.properties (git-ignored)
+## Fill in your own API keys below
+## ─────────────────────────────────────────────────────────
 
-# Android SDK path
-sdk.dir=/path/to/Android/Sdk
+## Android SDK path (set automatically by Android Studio)
+sdk.dir=/Users/YourName/Library/Android/sdk
 
-# ─── Google Maps API Key ──────────────────────────────────────────────────────
-# 1. Go to https://console.cloud.google.com/
-# 2. Create project → Enable "Maps SDK for Android" + "Geocoding API"
-# 3. Create API Key → restrict to package: ai.nexuzy.assistant
-# Used for: reverse geocoding GPS coords to city name
-MAPS_API_KEY=AIzaSy_YOUR_MAPS_KEY_HERE
+## ── Google Maps + Geocoding API ──────────────────────────
+## 1. Go to https://console.cloud.google.com/
+## 2. Create project → Enable:
+##      • Maps SDK for Android   (MapView, markers)
+##      • Geocoding API          (GPS → city name)
+## 3. Create API Key → restrict to package: ai.nexuzy.assistant + your SHA-1
+MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY_HERE
 
-# ─── NewsAPI Key ──────────────────────────────────────────────────────────────
-# Free at https://newsapi.org/register (100 req/day free)
-# OPTIONAL: App works without this using Google News RSS fallback
-NEWS_API_KEY=your_newsapi_key_here
+## ── NewsAPI ───────────────────────────────────────────────
+## Get free key at https://newsapi.org
+NEWS_API_KEY=YOUR_NEWS_API_KEY_HERE
 
-# ─── AdMob ────────────────────────────────────────────────────────────────────
-# 1. Go to https://admob.google.com/
-# 2. Create App → Get App ID + Banner Ad Unit ID
-# Test IDs are already set in build.gradle as defaults
-# Replace below with your real IDs for production
-ADMOB_APP_ID=ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX
-ADMOB_BANNER_ID=ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX
+## ── Sarvaam AI API (cloud AI fallback when internet on) ───
+## Get API key at https://sarvam.ai
+## When set: AI uses Sarvaam API for responses when internet available
+## Improves accuracy significantly over offline-only mode
+## Leave blank to use DuckDuckGo search context only
+SARVAAM_API_KEY=YOUR_SARVAAM_API_KEY_HERE
+
+## ── AdMob (optional) ──────────────────────────────────────
+## Get IDs at https://admob.google.com
+## Leave as test IDs during development:
+ADMOB_APP_ID=ca-app-pub-3940256099942544~3347511713
+ADMOB_BANNER_ID=ca-app-pub-3940256099942544/6300978111
