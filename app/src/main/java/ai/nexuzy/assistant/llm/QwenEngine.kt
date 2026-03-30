@@ -1,28 +1,36 @@
 package ai.nexuzy.assistant.llm
 
 import android.content.Context
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.Dispatchers
 
 /**
  * QwenEngine: High-level interface over MLCEngineWrapper.
- * Uses Qwen2-1.5B-Instruct (Qwen 3B class) via MLC-LLM.
  *
- * Model download (HuggingFace, pre-compiled for Android):
- *   https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
+ * Default model: Qwen3-1.7B-q4f16_1-MLC
+ * (Official MLC-LLM Android config — mlc-ai/mlc-llm/android/MLCChat/mlc-package-config.json)
  *
- * Steps:
- *   1. Download mlc4j-release.aar from https://github.com/mlc-ai/mlc-llm/releases
- *   2. Place in app/libs/
- *   3. Uncomment in app/build.gradle:  implementation files('libs/mlc4j-release.aar')
- *   4. Uncomment imports in MLCEngineWrapper.kt
- *   5. Set MLCEngineWrapper.MLC_AVAILABLE = true
- *   6. Call engine.loadModel("Qwen2-1.5B-Instruct-q4f16_1-MLC", "Qwen2-1.5B-Instruct-q4f16_1-MLC")
+ * HuggingFace: https://huggingface.co/mlc-ai/Qwen3-1.7B-q4f16_1-MLC
+ * VRAM needed: ~3GB  (works on most mid/high-end Android phones)
+ *
+ * Lighter fallback: Qwen3-0.6B-q0f16-MLC (~1.5GB VRAM, lower quality)
+ * HuggingFace: https://huggingface.co/mlc-ai/Qwen3-0.6B-q0f16-MLC
+ *
+ * To switch to the lighter model, change DEFAULT_MODEL_ID and DEFAULT_MODEL_LIB below.
  */
 class QwenEngine(context: Context) {
 
+    companion object {
+        // ✓ Synced with official mlc-package-config.json (mlc-ai/mlc-llm/android/MLCChat)
+        // Change to "Qwen3-0.6B-q0f16-MLC" for low-RAM devices
+        const val DEFAULT_MODEL_ID  = "Qwen3-1.7B-q4f16_1-MLC"
+        const val DEFAULT_MODEL_LIB = "Qwen3-1.7B-q4f16_1-MLC"
+        const val DEFAULT_MODEL_HF  = "https://huggingface.co/mlc-ai/Qwen3-1.7B-q4f16_1-MLC"
+        const val LIGHT_MODEL_ID    = "Qwen3-0.6B-q0f16-MLC"
+        const val LIGHT_MODEL_LIB   = "Qwen3-0.6B-q0f16-MLC"
+        const val LIGHT_MODEL_HF    = "https://huggingface.co/mlc-ai/Qwen3-0.6B-q0f16-MLC"
+    }
+
     private val wrapper = MLCEngineWrapper(context)
-    private val conversationHistory = mutableListOf<Pair<String, String>>() // (user, ai)
+    private val conversationHistory = mutableListOf<Pair<String, String>>()
 
     val state get() = wrapper.getState()
     var onStateChange: ((MLCEngineWrapper.EngineState) -> Unit)?
@@ -33,18 +41,13 @@ class QwenEngine(context: Context) {
         set(value) { wrapper.onTokenStream = value }
 
     init {
-        // Auto-load Qwen2-1.5B if MLC available
         if (MLCEngineWrapper.MLC_AVAILABLE) {
-            wrapper.loadModel(
-                modelId = "Qwen2-1.5B-Instruct-q4f16_1-MLC",
-                modelLib = "Qwen2-1.5B-Instruct-q4f16_1-MLC"
-            )
+            wrapper.loadModel(DEFAULT_MODEL_ID, DEFAULT_MODEL_LIB)
         }
     }
 
     suspend fun generate(prompt: String): String {
         val response = wrapper.generate(prompt, conversationHistory.toList())
-        // Store history for multi-turn conversation
         val userMsg = prompt.lines()
             .dropWhile { !it.startsWith("<|im_start|>user") }
             .drop(1).firstOrNull() ?: ""
@@ -58,14 +61,30 @@ class QwenEngine(context: Context) {
     fun resetHistory() = wrapper.resetChat().also { conversationHistory.clear() }
     fun unload() = wrapper.unload()
 
-    fun downloadModel(
+    /** Download default model (Qwen3-1.7B) from HuggingFace */
+    fun downloadDefaultModel(
         onProgress: (Int, Int) -> Unit = { _, _ -> },
         onComplete: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
         wrapper.downloadModel(
-            modelId = "Qwen2-1.5B-Instruct-q4f16_1-MLC",
-            modelUrl = "https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC",
+            modelId  = DEFAULT_MODEL_ID,
+            modelUrl = DEFAULT_MODEL_HF,
+            onProgress = onProgress,
+            onComplete = onComplete,
+            onError = onError
+        )
+    }
+
+    /** Download lighter Qwen3-0.6B for low-RAM phones */
+    fun downloadLightModel(
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        onComplete: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        wrapper.downloadModel(
+            modelId  = LIGHT_MODEL_ID,
+            modelUrl = LIGHT_MODEL_HF,
             onProgress = onProgress,
             onComplete = onComplete,
             onError = onError
