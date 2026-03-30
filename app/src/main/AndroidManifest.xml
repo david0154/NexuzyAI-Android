@@ -17,7 +17,13 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.DavidAI"
-        android:usesCleartextTraffic="false">
+        android:usesCleartextTraffic="false"
+        android:enableOnBackInvokedCallback="true">
+        <!--
+            android:enableOnBackInvokedCallback="true"
+            Enables Android 16 (API 36) predictive back gesture system-wide.
+            All activities use OnBackPressedDispatcher instead of onBackPressed().
+        -->
 
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
@@ -31,7 +37,8 @@
             android:name=".SplashActivity"
             android:exported="true"
             android:theme="@style/Theme.DavidAI.Splash"
-            android:screenOrientation="portrait">
+            android:screenOrientation="portrait"
+            android:windowLayoutInDisplayCutoutMode="shortEdges">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -42,17 +49,25 @@
             android:name=".ChatActivity"
             android:exported="false"
             android:screenOrientation="portrait"
-            android:windowSoftInputMode="adjustResize" />
+            android:windowSoftInputMode="adjustResize"
+            android:windowLayoutInDisplayCutoutMode="shortEdges" />
+        <!--
+            android:windowLayoutInDisplayCutoutMode="shortEdges"
+            Allows content to draw into display cutout areas (notch/punch-hole)
+            on Android 15+ devices without being blocked by a black bar.
+        -->
 
         <activity
             android:name=".AboutActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="portrait"
+            android:windowLayoutInDisplayCutoutMode="shortEdges" />
 
         <activity
             android:name=".PrivacyPolicyActivity"
             android:exported="false"
-            android:screenOrientation="portrait" />
+            android:screenOrientation="portrait"
+            android:windowLayoutInDisplayCutoutMode="shortEdges" />
 
     </application>
 

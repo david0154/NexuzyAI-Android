@@ -10,9 +10,13 @@ import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
 import android.view.View
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.gms.ads.AdRequest
@@ -51,8 +55,34 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // ── Android 15+ Edge-to-Edge ─────────────────────────────────
+        // When targetSdk >= 35, the system enforces edge-to-edge by default.
+        // setDecorFitsSystemWindows(false) tells the window NOT to fit system
+        // bars automatically — we handle insets manually below.
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+
         binding = ActivityChatBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        // ── Apply Window Insets for Edge-to-Edge padding ───────────────
+        // This pads the root view so content never hides behind:
+        //   • Status bar (top)
+        //   • Navigation bar (bottom)
+        //   • Display cutout / notch (top on most phones)
+        ViewCompat.setOnApplyWindowInsetsListener(binding.root) { view, insets ->
+            val systemBars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or
+                WindowInsetsCompat.Type.displayCutout()
+            )
+            view.setPadding(
+                systemBars.left,
+                systemBars.top,
+                systemBars.right,
+                systemBars.bottom
+            )
+            insets
+        }
 
         toolExecutor = ToolExecutor(this)
         locationTool = LocationTool(this)
@@ -63,10 +93,11 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         setupSTT()
         setupTTS()
         setupEngineObserver()
+        setupBackHandler()
         requestPermissions()
         updateModelBadge()
 
-        // Greeting with device-selected model name
+        // Greeting
         addAIMessage("👋 Hi! I'm ${qwenEngine.displayName} — your private on-device AI.\n" +
             "Try: \"What's the weather?\", \"Latest news\", \"Who made you?\", or \"Open YouTube\"")
 
@@ -84,8 +115,26 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
         binding.aboutBtn.setOnClickListener {
             startActivity(Intent(this, AboutActivity::class.java))
         }
-        // Model badge tap → show model selector sheet
         binding.modelBadge.setOnClickListener { showModelSelector() }
+    }
+
+    // ── Android 16 Predictive Back Gesture ─────────────────────────
+    // OnBackPressedCallback replaces the deprecated onBackPressed().
+    // This enables the predictive back swipe animation on Android 16.
+    private fun setupBackHandler() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // If keyboard is open, close it first; else finish activity
+                val rootView = binding.root
+                val insets = ViewCompat.getRootWindowInsets(rootView)
+                val imeVisible = insets?.isVisible(WindowInsetsCompat.Type.ime()) == true
+                if (imeVisible) {
+                    rootView.clearFocus()
+                } else {
+                    finish()
+                }
+            }
+        })
     }
 
     private fun updateModelBadge() {
@@ -150,7 +199,7 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
             try {
                 val intent = IntentClassifier.classify(userInput)
 
-                // Handle MODEL_INFO intent with real model data
+                // MODEL_INFO intent — build response from real model data
                 val toolResult = if (intent == IntentClassifier.Intent.MODEL_INFO) {
                     val m = qwenEngine.activeModel
                     val info = buildString {
@@ -177,7 +226,7 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     return@launch
                 }
 
-                // AI generation (weather, news, general chat)
+                // Build prompt with tool context
                 val locationHint = locationTool.getLocationSystemPrompt()
                 val prompt = PromptBuilder.build(
                     userInput       = userInput,
@@ -185,8 +234,16 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                     locationHint    = locationHint,
                     activeModelName = qwenEngine.displayName
                 )
+
+                // ── Generate — passes userQuery + toolContext for full hybrid routing ─
+                // • Internet ON  → HybridAnswerEngine: DuckDuckGo + Sarvaam AI fused
+                // • Internet OFF → LocalOfflineEngine: MLC or smart rule-based NLP
                 addAIMessage("")
-                val response = qwenEngine.generate(prompt)
+                val response = qwenEngine.generate(
+                    prompt      = prompt,
+                    userQuery   = userInput,
+                    toolContext = toolResult.content
+                )
                 if (messages.isNotEmpty() && !messages.last().isUser) {
                     messages[messages.size - 1] = messages.last().copy(text = response)
                     chatAdapter.notifyItemChanged(messages.size - 1)
@@ -204,7 +261,6 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
 
     private fun speakIfReady(text: String) {
         if (ttsReady && text.isNotBlank()) {
-            // Strip markdown for TTS
             val plain = text.replace(Regex("[*_`#>\\[\\]()]"), "").take(250)
             tts?.speak(plain, TextToSpeech.QUEUE_FLUSH, null, "ai")
         }
@@ -237,15 +293,15 @@ class ChatActivity : AppCompatActivity(), TextToSpeech.OnInitListener {
                 binding.voiceOrb.visibility = View.GONE
                 if (text.isNotEmpty()) { binding.messageInput.setText(""); processInput(text) }
             }
-            override fun onError(error: Int) { isListening = false; updateVoiceBtn(false); binding.voiceOrb.visibility = View.GONE }
+            override fun onError(error: Int)        { isListening = false; updateVoiceBtn(false); binding.voiceOrb.visibility = View.GONE }
             override fun onReadyForSpeech(p: Bundle?) { binding.voiceOrb.visibility = View.VISIBLE }
-            override fun onBeginningOfSpeech() {}
+            override fun onBeginningOfSpeech()       {}
             override fun onRmsChanged(rms: Float) {
                 val s = 1f + (rms.coerceIn(0f, 10f) / 20f)
                 binding.voiceOrb.scaleX = s; binding.voiceOrb.scaleY = s
             }
             override fun onBufferReceived(b: ByteArray?) {}
-            override fun onEndOfSpeech() { binding.voiceOrb.visibility = View.GONE }
+            override fun onEndOfSpeech()             { binding.voiceOrb.visibility = View.GONE }
             override fun onPartialResults(partial: Bundle?) {
                 val p = partial?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)?.firstOrNull() ?: ""
                 if (p.isNotEmpty()) binding.messageInput.setText(p)
