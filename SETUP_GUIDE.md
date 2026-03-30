@@ -1,155 +1,107 @@
-# NexuzyAI — Complete Setup Guide (v6)
+# David AI — Setup Guide
 
 ---
 
-## ⚠️ THE REAL WAY mlc4j WORKS
+## Why mlc4j Is Needed
 
-After fully reading `mlc-ai/mlc-llm/android/MLCChat/settings.gradle`:
+David AI uses Qwen3 / Gemma models compiled as native C++ (TVM runtime).
+Android can’t call C++ from Kotlin directly — it needs a JNI bridge.
+**mlc4j IS that bridge.** It provides:
 
+- `MLCEngine` Kotlin class → call `engine.reload()`, `engine.chat.completions.create()`
+- `libmlc_llm.so` → compiled AI runtime (arm64-v8a)
+- `libmlc4j.so` → JNI layer between Kotlin and C++
+
+It can’t be downloaded from Maven because the `.so` files are compiled
+specifically for your chosen model (Qwen3 vs Gemma) and quantization (q4f16).
+**MLC-LLM compiles it fresh once from `mlc-package-config.json`.**
+
+---
+
+## Without mlc4j — What Still Works ✅
+
+| Feature | Works without mlc4j? |
+|---|---|
+| 🌦️ Weather (Open-Meteo) | ✅ Yes |
+| 📰 News (Google RSS) | ✅ Yes |
+| 📍 Location (GPS) | ✅ Yes |
+| ⏰ Alarms | ✅ Yes |
+| 💡 Flashlight | ✅ Yes |
+| 🎙️ Voice STT + TTS | ✅ Yes |
+| 🚀 Open Apps | ✅ Yes |
+| 👨‍💻 Developer info | ✅ Yes |
+| 🧠 On-device AI chat | ❌ Needs mlc4j |
+
+---
+
+## Step 1 — Generate mlc4j
+
+```bash
+# Linux / Mac / WSL2 on Windows (native Windows NOT supported)
+pip install mlc-llm
+
+# From NexuzyAI-Android project root:
+python3 -m mlc_llm package
+# Reads: mlc-package-config.json
+# Outputs:
+#   dist/lib/mlc4j     ← Android JNI module (this is what gets added as :mlc4j)
+#   dist/bundle/       ← compiled model weights
+```
+
+---
+
+## Step 2 — Connect mlc4j to the Project
+
+In `settings.gradle`, uncomment:
 ```gradle
-// Official MLCChat settings.gradle:
 include ':mlc4j'
 project(':mlc4j').projectDir = file('dist/lib/mlc4j')
 ```
 
-**mlc4j lives in `dist/lib/mlc4j`** — a folder that is **generated** by
-running `python3 -m mlc_llm package`. It is not in the GitHub repo
-(listed in `.gitignore`). It is NOT a downloadable AAR.
-
----
-
-## Step 1 — Enable Qwen3 (MLC-LLM)
-
-### The Correct Method
-
-```bash
-# 1. Install MLC-LLM Python package
-#    (Use Linux/Mac or WSL on Windows — Windows native is NOT supported)
-pip install mlc-llm
-
-# Verify install:
-python3 -c "import mlc_llm; print('MLC ready')"
-
-# 2. mlc-package-config.json is already in your project root
-#    It targets Qwen3-1.7B and Qwen3-0.6B for Android
-
-# 3. Run the packager from NexuzyAI-Android project root:
-python3 -m mlc_llm package
-
-# This will:
-#   a. Download/compile Qwen3-1.7B model library (.so) for arm64-v8a
-#   b. Download model weights from HuggingFace (~1.5GB)
-#   c. Generate dist/lib/mlc4j    ← Android module
-#   d. Generate dist/bundle/      ← compiled weights
-# Takes ~10-30 mins on first run
-
-# 4. In settings.gradle, uncomment:
-#      include ':mlc4j'
-#      project(':mlc4j').projectDir = file('dist/lib/mlc4j')
-
-# 5. In app/build.gradle, uncomment:
-#      implementation project(':mlc4j')
-
-# 6. In MLCEngineWrapper.kt:
-#    - Set:       const val MLC_AVAILABLE = true
-#    - Uncomment: import ai.mlc.mlcllm.MLCEngine
-#    - Uncomment: import ai.mlc.mlcllm.OpenAIProtocol
-#    - Uncomment: import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
-#    - Uncomment: all engine.* lines inside loadModel() and generate()
-
-# 7. Build and run in Android Studio
-```
-
-### Windows Users (WSL Required)
-
-```powershell
-# MLC-LLM Python build ONLY works on Linux/Mac.
-# On Windows, use WSL2:
-wsl --install
-# Then inside WSL:
-pip install mlc-llm
-python3 -m mlc_llm package
-# The generated dist/ folder works on both WSL and Windows Android Studio
-```
-
-### Lightweight Alternative: llama.cpp GGUF
-
-If MLC setup is too heavy, use `llama.cpp` with GGUF model files.
-No Python compilation needed:
-
-```bash
-# Download GGUF model directly:
-# https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF
-# File: Qwen2-1.5B-Instruct-Q4_K_M.gguf (~1GB)
-
-# Build llama.cpp Android JNI:
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp
-mkdir build-android && cd build-android
-cmake .. -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK/build/cmake/android.toolchain.cmake \
-         -DANDROID_ABI=arm64-v8a \
-         -DANDROID_PLATFORM=android-26 \
-         -DLLAMA_ANDROID_JNI=ON
-make -j$(nproc)
-# Copy libllama.so to app/src/main/jniLibs/arm64-v8a/
+In `app/build.gradle`, uncomment:
+```gradle
+implementation project(':mlc4j')
 ```
 
 ---
 
-## Step 2 — Google Maps API Key
+## Step 3 — Enable in Code
 
-1. [console.cloud.google.com](https://console.cloud.google.com)
-2. Enable: **Maps SDK for Android** + **Geocoding API**
-3. Create API key → restrict to package `ai.nexuzy.assistant`
-4. `local.properties`:
+In `app/src/main/java/ai/david/ai/llm/MLCEngineWrapper.kt`:
+
+1. Set `MLC_AVAILABLE = true`
+2. Uncomment the 3 imports:
+   ```kotlin
+   import ai.mlc.mlcllm.MLCEngine
+   import ai.mlc.mlcllm.OpenAIProtocol
+   import ai.mlc.mlcllm.OpenAIProtocol.ChatCompletionMessage
    ```
-   MAPS_API_KEY=AIzaSy_YOUR_KEY
-   ```
+3. Uncomment `private val engine = MLCEngine()`
+4. Uncomment all `engine.*` lines in `loadModel()` and `generate()`
 
 ---
 
-## Step 3 — News (Google RSS, No Key Needed ✅)
+## Step 4 — Build and Run
 
-Google News RSS works with zero setup:
-```
-https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en
-```
-Optional NewsAPI (100 req/day free): [newsapi.org/register](https://newsapi.org/register)
-```
-NEWS_API_KEY=your_key  (in local.properties)
-```
+Open Android Studio → **Build → Make Project** → **Run** on device.
+
+The model badge will show:
+- `David AI Lite` on low-RAM phones
+- `David AI 1B` on most phones
+- `David AI 2B` on flagship phones
 
 ---
 
-## Step 4 — AdMob
+## API Keys (Optional)
 
-1. [admob.google.com](https://admob.google.com) → Add app → Banner ad unit
-2. `local.properties`:
-   ```
-   ADMOB_APP_ID=ca-app-pub-XXXX~XXXX
-   ADMOB_BANNER_ID=ca-app-pub-XXXX/XXXX
-   ```
-> Test IDs already set — ads show immediately without real keys.
+```
+cp local.properties.example local.properties
+```
 
----
+| Key | Required | Source |
+|---|---|---|
+| `MAPS_API_KEY` | Optional | [console.cloud.google.com](https://console.cloud.google.com) |
+| `NEWS_API_KEY` | Optional | [newsapi.org](https://newsapi.org/register) |
+| `ADMOB_APP_ID` | Optional | [admob.google.com](https://admob.google.com) |
 
-## Step 5 — Voice (Zero Setup ✅)
-
-- **STT**: Android native `SpeechRecognizer` (`en-IN`)
-- **TTS**: Android native `TextToSpeech` (`en-IN`)
-- Partial speech shown live in input box
-- Voice orb pulses with mic volume via `onRmsChanged()`
-
----
-
-## App Works Right Now ✅
-
-Without Qwen3, these work fully:
-| Feature | How |
-|---|---|
-| 🌦️ Weather | Open-Meteo API, no key |
-| 📰 News | Google RSS, no key |
-| 📍 Location | GPS → city via Geocoder |
-| 📱 Device control | Alarms, flashlight, media, apps |
-| 🎙️ Voice | SpeechRecognizer + TTS |
-| 📮 AdMob | Test mode, no key |
+Test AdMob IDs are pre-configured — ads work without any key.
