@@ -1,84 +1,74 @@
 package ai.nexuzy.assistant.llm
 
 import android.content.Context
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 /**
- * QwenEngine: On-device LLM using Qwen 3B via MLC-LLM (mlc4j).
+ * QwenEngine: High-level interface over MLCEngineWrapper.
+ * Uses Qwen2-1.5B-Instruct (Qwen 3B class) via MLC-LLM.
  *
- * HOW TO SET UP QWEN 3B:
- * ─────────────────────────────────────────────────────────────────────
- * 1. Install MLC-LLM Python package:
- *    pip install mlc-llm
+ * Model download (HuggingFace, pre-compiled for Android):
+ *   https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
  *
- * 2. Compile Qwen3B for Android:
- *    mlc_llm compile Qwen/Qwen2-1.5B-Instruct \
- *        --quantization q4f16_1 \
- *        --target android \
- *        --output dist/qwen3b-android/
- *
- *    OR download pre-built from HuggingFace:
- *    https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC
- *
- * 3. Place compiled weights in:  app/src/main/assets/qwen3b/
- * 4. Place mlc4j-release.aar in: app/libs/
- * 5. Uncomment the mlc4j import + engine lines below.
- * ─────────────────────────────────────────────────────────────────────
- *
- * Alternatively use llama.cpp android via JNI:
- *   https://github.com/ggerganov/llama.cpp/tree/master/examples/llama.android
- *   Model: Qwen2-1.5B-Instruct-Q4_K_M.gguf
+ * Steps:
+ *   1. Download mlc4j-release.aar from https://github.com/mlc-ai/mlc-llm/releases
+ *   2. Place in app/libs/
+ *   3. Uncomment in app/build.gradle:  implementation files('libs/mlc4j-release.aar')
+ *   4. Uncomment imports in MLCEngineWrapper.kt
+ *   5. Set MLCEngineWrapper.MLC_AVAILABLE = true
+ *   6. Call engine.loadModel("Qwen2-1.5B-Instruct-q4f16_1-MLC", "Qwen2-1.5B-Instruct-q4f16_1-MLC")
  */
-class QwenEngine(private val context: Context) {
+class QwenEngine(context: Context) {
 
-    private var isModelLoaded = false
+    private val wrapper = MLCEngineWrapper(context)
+    private val conversationHistory = mutableListOf<Pair<String, String>>() // (user, ai)
 
-    // Uncomment when mlc4j AAR is placed in app/libs/:
-    // private var engine: ai.mlc.mlcllm.MLCEngine? = null
+    val state get() = wrapper.getState()
+    var onStateChange: ((MLCEngineWrapper.EngineState) -> Unit)?
+        get() = wrapper.onStateChange
+        set(value) { wrapper.onStateChange = value }
+    var onTokenStream: ((String) -> Unit)?
+        get() = wrapper.onTokenStream
+        set(value) { wrapper.onTokenStream = value }
 
     init {
-        loadModel()
-    }
-
-    private fun loadModel() {
-        try {
-            // engine = ai.mlc.mlcllm.MLCEngine()
-            // engine?.load("qwen3b", context.filesDir.absolutePath + "/qwen3b")
-            isModelLoaded = false // Set true after loading AAR
-        } catch (e: Exception) {
-            isModelLoaded = false
+        // Auto-load Qwen2-1.5B if MLC available
+        if (MLCEngineWrapper.MLC_AVAILABLE) {
+            wrapper.loadModel(
+                modelId = "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+                modelLib = "Qwen2-1.5B-Instruct-q4f16_1-MLC"
+            )
         }
     }
 
-    suspend fun generate(prompt: String): String = withContext(Dispatchers.Default) {
-        if (!isModelLoaded) {
-            // Fallback: echo tool result from prompt when model not loaded
-            return@withContext extractFallbackResponse(prompt)
+    suspend fun generate(prompt: String): String {
+        val response = wrapper.generate(prompt, conversationHistory.toList())
+        // Store history for multi-turn conversation
+        val userMsg = prompt.lines()
+            .dropWhile { !it.startsWith("<|im_start|>user") }
+            .drop(1).firstOrNull() ?: ""
+        if (userMsg.isNotEmpty() && response.isNotEmpty()) {
+            conversationHistory.add(Pair(userMsg, response))
+            if (conversationHistory.size > 10) conversationHistory.removeAt(0)
         }
-        try {
-            // return@withContext engine!!.generate(prompt, maxTokens = 256)
-            extractFallbackResponse(prompt)
-        } catch (e: Exception) {
-            "⚠️ Model error: ${e.message}"
-        }
+        return response
     }
 
-    /**
-     * Fallback: extracts tool result from prompt and formats it.
-     * Works even before Qwen model weights are loaded.
-     */
-    private fun extractFallbackResponse(prompt: String): String {
-        return when {
-            prompt.contains("TOOL RESULT") -> {
-                val toolLine = prompt.lines()
-                    .firstOrNull { it.startsWith("Current weather") || it.startsWith("Latest news") ||
-                                  it.startsWith("Alarm") || it.startsWith("Flashlight") ||
-                                  it.startsWith("Media") || it.startsWith("App launch") }
-                    ?: "Here's what I found."
-                toolLine
-            }
-            else -> "I'm NexuzyAI. Please load the Qwen 3B model weights to enable full responses. See QwenEngine.kt for setup instructions."
-        }
+    fun resetHistory() = wrapper.resetChat().also { conversationHistory.clear() }
+    fun unload() = wrapper.unload()
+
+    fun downloadModel(
+        onProgress: (Int, Int) -> Unit = { _, _ -> },
+        onComplete: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        wrapper.downloadModel(
+            modelId = "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+            modelUrl = "https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC",
+            onProgress = onProgress,
+            onComplete = onComplete,
+            onError = onError
+        )
     }
 }

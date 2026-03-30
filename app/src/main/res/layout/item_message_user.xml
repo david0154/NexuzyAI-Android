@@ -1,20 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="6dp"
+    android:paddingStart="8dp"
+    android:paddingEnd="8dp"
+    android:paddingTop="4dp"
+    android:paddingBottom="4dp"
     android:gravity="end">
 
     <androidx.cardview.widget.CardView
-        xmlns:app="http://schemas.android.com/apk/res-auto"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:cardBackgroundColor="#1A73E8"
-        app:cardCornerRadius="18dp"
-        app:cardMaxElevation="4dp"
+        app:cardBackgroundColor="@color/colorUserBubble"
+        app:cardCornerRadius="20dp"
+        app:cardElevation="2dp"
         android:layout_gravity="end"
-        android:layout_marginStart="60dp">
+        android:layout_marginStart="64dp">
 
         <LinearLayout
             android:layout_width="wrap_content"
@@ -29,7 +32,7 @@
                 android:id="@+id/msgText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/colorUserText"
                 android:textSize="15sp"
                 android:lineSpacingExtra="2dp" />
 
@@ -37,10 +40,10 @@
                 android:id="@+id/msgTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textColor="#BBDEFB"
                 android:textSize="10sp"
+                android:textColor="#BBDEFB"
                 android:layout_gravity="end"
-                android:layout_marginTop="4dp" />
+                android:layout_marginTop="3dp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 

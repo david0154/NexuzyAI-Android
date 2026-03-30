@@ -1,0 +1,16 @@
+{
+  "model_libs": [
+    "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+    "Qwen2-0.5B-Instruct-q4f16_1-MLC",
+    "gemma-2-2b-it-q4f16_1-MLC",
+    "llama-3-8b-instruct-q4f16_1-MLC"
+  ],
+  "model_list": [
+    {
+      "model_url": "https://huggingface.co/mlc-ai/Qwen2-1.5B-Instruct-q4f16_1-MLC",
+      "model_id": "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+      "model_lib": "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+      "estimated_vram_bytes": 2000000000
+    }
+  ]
+}
