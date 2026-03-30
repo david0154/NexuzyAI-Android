@@ -7,12 +7,15 @@ package ai.nexuzy.assistant.llm
 //  License: Apache 2.0
 // ============================================================
 //
-//  GENERATION PRIORITY CHAIN:
+//  GENERATION STRATEGY (internet ON):
 //
-//    1. Local MLC model  (if MLC_AVAILABLE=true and model loaded)
-//    2. Sarvaam AI API   (if internet on + SARVAAM_API_KEY set)
-//    3. DuckDuckGo       (injected as tool context via ToolExecutor)
-//    4. Offline fallback (shows tool result or guidance message)
+//    DuckDuckGo search  ──┐
+//                          ├──► HybridAnswerEngine ──► Fused Answer
+//    Sarvaam AI API     ──┘          ▲
+//    Local MLC model ────────────────┘  (also fused if available)
+//
+//  GENERATION STRATEGY (internet OFF):
+//    Local MLC model  ──► Offline fallback message
 //
 //  HOW mlc4j IS GENERATED:
 //    pip install mlc-llm
@@ -47,17 +50,22 @@ class MLCEngineWrapper(private val context: Context) {
     // private val engine = MLCEngine()
 
     private val executor = Executors.newSingleThreadExecutor()
-    private val scope = CoroutineScope(Dispatchers.Main + Job())
+    private val scope    = CoroutineScope(Dispatchers.Main + Job())
     private val appDirFile = context.getExternalFilesDir("") ?: context.filesDir
 
     var onStateChange: ((EngineState) -> Unit)? = null
     var onTokenStream: ((String) -> Unit)? = null
     private var currentState = EngineState.NOT_LOADED
 
-    // Sarvaam AI client — activated when internet is available
+    // Sarvaam AI client
     private val sarvaamClient: SarvaamAIClient? by lazy {
-        val key = try { BuildConfig.SARVAAM_API_KEY } catch (e: Exception) { "" }
+        val key = try { BuildConfig.SARVAAM_API_KEY } catch (_: Exception) { "" }
         if (key.isNotBlank()) SarvaamAIClient(key) else null
+    }
+
+    // HybridAnswerEngine: combines MLC + Sarvaam + DuckDuckGo
+    private val hybridEngine: HybridAnswerEngine by lazy {
+        HybridAnswerEngine(context, sarvaamClient)
     }
 
     enum class EngineState { NOT_LOADED, LOADING, READY, GENERATING, FAILED }
@@ -79,62 +87,70 @@ class MLCEngineWrapper(private val context: Context) {
     }
 
     /**
-     * Generate a response using the priority chain:
-     *   1. Local MLC model  (if MLC_AVAILABLE)
-     *   2. Sarvaam AI API   (if internet + key configured)
-     *   3. Offline fallback (tool context or guidance)
+     * Generate a response.
+     *
+     * When internet is ON:
+     *   → HybridAnswerEngine runs DuckDuckGo + Sarvaam AI in parallel,
+     *     fuses the results with local MLC output (if available) for the
+     *     most accurate possible answer.
+     *
+     * When internet is OFF:
+     *   → Local MLC only (if loaded), else offline fallback.
+     *
+     * @param prompt      Full prompt string (from PromptBuilder, includes tool context)
+     * @param userQuery   Raw user question (for DuckDuckGo search grounding)
+     * @param toolContext Tool result already fetched (weather/news/location/link)
+     * @param history     Conversation history
      */
     suspend fun generate(
         prompt: String,
+        userQuery: String = "",
+        toolContext: String = "",
         history: List<Pair<String, String>> = emptyList()
     ): String = withContext(Dispatchers.IO) {
 
-        // --- 1. Local MLC model ---
+        // --- Try local MLC model first ---
+        var mlcResult: String? = null
         if (MLC_AVAILABLE && currentState == EngineState.READY) {
             setState(EngineState.GENERATING)
             val sb = StringBuilder()
             try {
-                // val messages = mutableListOf<ChatCompletionMessage>()
-                // history.forEach { (u, a) ->
-                //     messages += ChatCompletionMessage(role=user, content=u)
-                //     messages += ChatCompletionMessage(role=assistant, content=a)
-                // }
-                // messages += ChatCompletionMessage(role=user, content=prompt)
-                // val responses = engine.chat.completions.create(messages=messages, stream_options=...)
-                // for (res in responses) {
-                //     for (choice in res.choices) {
-                //         choice.delta.content?.let { token ->
-                //             sb.append(token.asText())
-                //             scope.launch { onTokenStream?.invoke(token.asText()) }
-                //         }
+                // val messages = buildMessages(history, prompt)
+                // val responses = engine.chat.completions.create(messages, stream_options=...)
+                // for (res in responses) { res.choices.forEach { choice ->
+                //     choice.delta.content?.asText()?.let { token ->
+                //         sb.append(token)
+                //         scope.launch { onTokenStream?.invoke(token) }
                 //     }
-                // }
+                // }}
+                mlcResult = sb.toString().takeIf { it.isNotBlank() }
             } catch (e: Exception) {
-                Log.e(TAG, "MLC generate error: ${e.message}")
+                Log.e(TAG, "MLC error: ${e.message}")
+            } finally {
                 setState(EngineState.READY)
-                return@withContext "Error: ${e.message}"
-            }
-            setState(EngineState.READY)
-            return@withContext sb.toString()
-        }
-
-        // --- 2. Sarvaam AI API (when internet is on) ---
-        if (NetworkUtils.isInternetAvailable(context) && sarvaamClient != null) {
-            Log.d(TAG, "Using Sarvaam AI API for generation")
-            val sarvaamResponse = sarvaamClient!!.generate(prompt, history)
-            if (!sarvaamResponse.isNullOrBlank()) {
-                // Simulate token streaming for UI consistency
-                val words = sarvaamResponse.split(" ")
-                for (word in words) {
-                    scope.launch { onTokenStream?.invoke("$word ") }
-                    delay(20)
-                }
-                return@withContext sarvaamResponse
             }
         }
 
-        // --- 3. Offline fallback ---
-        fallbackResponse(prompt)
+        // --- Hand off to HybridAnswerEngine when internet available,
+        //     OR just return MLC result when offline ---
+        val effectiveQuery = userQuery.ifBlank { extractUserQuery(prompt) }
+        val finalAnswer = hybridEngine.generate(
+            userQuery   = effectiveQuery,
+            toolContext = toolContext,
+            history     = history,
+            mlcResult   = mlcResult
+        )
+
+        // Stream the final answer token by token for smooth UI
+        if (finalAnswer.isNotBlank()) {
+            val words = finalAnswer.split(" ")
+            for (word in words) {
+                scope.launch { onTokenStream?.invoke("$word ") }
+                delay(18)
+            }
+        }
+
+        finalAnswer
     }
 
     fun resetChat() {
@@ -160,9 +176,9 @@ class MLCEngineWrapper(private val context: Context) {
             try {
                 val configFile = File(modelDir, "mlc-chat-config.json")
                 if (!configFile.exists()) {
-                    URL("$modelUrl/resolve/main/mlc-chat-config.json").openStream().use { input ->
+                    URL("$modelUrl/resolve/main/mlc-chat-config.json").openStream().use { inp ->
                         FileOutputStream(configFile).use { out ->
-                            Channels.newChannel(input).use { src ->
+                            Channels.newChannel(inp).use { src ->
                                 out.channel.transferFrom(src, 0, Long.MAX_VALUE)
                             }
                         }
@@ -178,17 +194,15 @@ class MLCEngineWrapper(private val context: Context) {
     private fun setState(s: EngineState) { currentState = s; onStateChange?.invoke(s) }
     fun getState() = currentState
 
-    private fun fallbackResponse(prompt: String): String {
-        // Check if any tool context was injected — show that
-        val toolLine = prompt.lines().firstOrNull {
-            it.startsWith("Current weather") || it.startsWith("Latest news") ||
-            it.startsWith("Alarm") || it.startsWith("[DuckDuckGo") ||
-            it.startsWith("[Link content") || it.startsWith("\u2022")
-        }
-        return toolLine?.trim()
-            ?: if (NetworkUtils.isInternetAvailable(context))
-                "\uD83D\uDCA1 MLC model not ready. Configure SARVAAM_API_KEY in local.properties for cloud AI, or run: python3 -m mlc_llm package"
-               else
-                "\uD83D\uDCA1 Offline mode. Connect to internet for enhanced responses, or run: python3 -m mlc_llm package to enable on-device AI."
+    /** Extract the last user message from the prompt string */
+    private fun extractUserQuery(prompt: String): String {
+        val lines = prompt.lines()
+        val userIdx = lines.indexOfLast { it.trim() == "<|im_start|>user" }
+        return if (userIdx >= 0 && userIdx + 1 < lines.size)
+            lines.drop(userIdx + 1)
+                .takeWhile { it.trim() != "<|im_end|>" }
+                .joinToString(" ")
+                .trim()
+        else prompt.take(200)
     }
 }
