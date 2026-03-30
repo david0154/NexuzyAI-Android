@@ -7,7 +7,6 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Launch ChatActivity as main screen
         startActivity(Intent(this, ChatActivity::class.java))
         finish()
     }

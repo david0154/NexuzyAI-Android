@@ -1,7 +1,24 @@
-# Copy this to local.properties and fill in your keys
-# DO NOT commit local.properties to git
+# ─── Copy this file to local.properties (never commit that file) ──────────────
 
-sdk.dir=/path/to/your/Android/Sdk
+# Android SDK path
+sdk.dir=/path/to/Android/Sdk
 
-# NewsAPI key (free at https://newsapi.org/)
+# ─── Google Maps API Key ──────────────────────────────────────────────────────
+# 1. Go to https://console.cloud.google.com/
+# 2. Create project → Enable "Maps SDK for Android" + "Geocoding API"
+# 3. Create API Key → restrict to package: ai.nexuzy.assistant
+# Used for: reverse geocoding GPS coords to city name
+MAPS_API_KEY=AIzaSy_YOUR_MAPS_KEY_HERE
+
+# ─── NewsAPI Key ──────────────────────────────────────────────────────────────
+# Free at https://newsapi.org/register (100 req/day free)
+# OPTIONAL: App works without this using Google News RSS fallback
 NEWS_API_KEY=your_newsapi_key_here
+
+# ─── AdMob ────────────────────────────────────────────────────────────────────
+# 1. Go to https://admob.google.com/
+# 2. Create App → Get App ID + Banner Ad Unit ID
+# Test IDs are already set in build.gradle as defaults
+# Replace below with your real IDs for production
+ADMOB_APP_ID=ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX
+ADMOB_BANNER_ID=ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX

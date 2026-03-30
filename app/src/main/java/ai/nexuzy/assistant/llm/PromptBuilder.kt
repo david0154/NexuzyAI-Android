@@ -1,41 +1,39 @@
 package ai.nexuzy.assistant.llm
 
 import ai.nexuzy.assistant.middleware.ToolExecutor
+import java.time.LocalDate
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
-/**
- * PromptBuilder: Constructs the final prompt sent to the on-device LLM.
- * Injects tool context + location as system prompt.
- */
 object PromptBuilder {
 
     fun build(
         userMessage: String,
         toolResult: ToolExecutor.ToolResult?,
-        locationHint: String = "Kolkata, India"
+        locationHint: String = "Kolkata, West Bengal, India"
     ): String {
-        val sb = StringBuilder()
+        val date = LocalDate.now().toString()
+        val time = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
 
-        sb.appendLine("[SYSTEM]")
-        sb.appendLine("You are NexuzyAI, a helpful Android assistant.")
-        sb.appendLine("User location: $locationHint")
-        sb.appendLine("Today: ${java.time.LocalDate.now()}")
+        return buildString {
+            appendLine("<|im_start|>system")
+            appendLine("You are NexuzyAI, a helpful, concise Android voice assistant.")
+            appendLine("User location: $locationHint")
+            appendLine("Current date: $date | Time: $time")
+            appendLine("Always reply in 2-3 sentences max. Be conversational and friendly.")
+            toolResult?.systemHint?.let { appendLine(it) }
+            appendLine("<|im_end|>")
 
-        toolResult?.systemHint?.let { hint ->
-            sb.appendLine(hint)
+            toolResult?.contextString?.let { ctx ->
+                appendLine("<|im_start|>tool")
+                appendLine(ctx)
+                appendLine("<|im_end|>")
+            }
+
+            appendLine("<|im_start|>user")
+            appendLine(userMessage)
+            appendLine("<|im_end|>")
+            appendLine("<|im_start|>assistant")
         }
-
-        toolResult?.contextString?.let { ctx ->
-            sb.appendLine()
-            sb.appendLine("[TOOL RESULT]")
-            sb.appendLine(ctx)
-        }
-
-        sb.appendLine()
-        sb.appendLine("[USER]")
-        sb.appendLine(userMessage)
-        sb.appendLine()
-        sb.appendLine("[ASSISTANT]")
-
-        return sb.toString()
     }
 }
