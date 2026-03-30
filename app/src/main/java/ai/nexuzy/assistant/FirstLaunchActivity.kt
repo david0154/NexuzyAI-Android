@@ -21,26 +21,20 @@ import ai.nexuzy.assistant.tools.NetworkUtils
 /**
  * FirstLaunchActivity — shown ONCE on first install.
  *
- * WHY the MLC model cannot be bundled in the APK:
- *   Google Play APK limit = 100 MB. MLC model = 700 MB – 2.1 GB.
- *   It is physically impossible to ship model weights inside the APK.
- *   This is the same constraint faced by ALL on-device AI apps
- *   (Gemini Nano, ChatGPT mobile, etc.) — all require a one-time download.
+ * Decision tree (checked in this exact order):
  *
- * What this screen does:
- *   • Internet OFF  → Explains user will get basic NLP now; shows "Start" button.
- *                    When they connect internet later, they can download from Settings.
- *   • Internet ON   → AUTO-starts MLC model download immediately (no button tap needed).
- *                    Shows live progress. "Skip" button always visible to abort.
- *                    After download: full AI works OFFLINE FOREVER.
- *
- * After first launch (skip or finish download):
- *   • Saves first_launch_done flag → goes directly to ChatActivity forever.
- *
- * Offline capability tiers:
- *   Tier 1 (no internet, no MLC):  Basic NLP only (greetings/date/math/identity)
- *   Tier 2 (MLC downloaded):       Full real AI offline — zero internet needed
- *   Tier 3 (internet, no MLC):     Sarvaam AI + DuckDuckGo cloud AI
+ *  ┌─────────────────────────────────────────────────────────────────┐
+ *  │ 1. MLC already downloaded?                                      │
+ *  │      YES → "✅ Full offline AI ready!" → auto-go to chat       │
+ *  │            (internet status does NOT matter at all)             │
+ *  │      NO  → check internet ↓                                     │
+ *  ├─────────────────────────────────────────────────────────────────┤
+ *  │ 2. Internet ON?                                                  │
+ *  │      YES → auto-download MLC in background                      │
+ *  │            skip button → use Sarvaam AI online instead          │
+ *  │      NO  → show honest limited-mode warning                     │
+ *  │            "connect Wi-Fi to auto-download"                     │
+ *  └─────────────────────────────────────────────────────────────────┘
  */
 class FirstLaunchActivity : AppCompatActivity() {
 
@@ -60,7 +54,7 @@ class FirstLaunchActivity : AppCompatActivity() {
     private lateinit var tvModelInfo: TextView
     private lateinit var tvProgress: TextView
     private lateinit var progressBar: ProgressBar
-    private lateinit var btnAction: Button   // changes label based on state
+    private lateinit var btnAction: Button
     private lateinit var btnSkip: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,91 +90,128 @@ class FirstLaunchActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        val hasInternet  = NetworkUtils.isInternetAvailable(this)
-        val recommended  = modelManager.recommendedModel()
-        val sizeStr      = modelManager.formatSize(recommended.estimatedBytes)
+        val recommended    = modelManager.recommendedModel()
+        val sizeStr        = modelManager.formatSize(recommended.estimatedBytes)
+        val mlcDownloaded  = downloadManager.isModelDownloaded(recommended)  // ← KEY CHECK
+        val hasInternet    = NetworkUtils.isInternetAvailable(this)
 
         tvTitle.text    = "🤖 Welcome to NexuzyAI"
         tvSubtitle.text = "Your private on-device AI assistant."
 
+        // ══════════════════════════════════════════════════════════════
+        // CASE 1: MLC model already on disk → FULL OFFLINE AI READY
+        //         Internet status is completely irrelevant here.
+        // ══════════════════════════════════════════════════════════════
+        if (mlcDownloaded) {
+            tvInternetBadge.text = "🟢 AI Model: Already Downloaded"
+            tvInternetBadge.setTextColor(
+                ContextCompat.getColor(this, android.R.color.holo_green_dark))
+
+            tvStatus.text =
+                "✅ Full offline AI is ready!\n\n" +
+                "NexuzyAI will work 100% offline with NO internet needed:\n" +
+                "✅ Full AI conversations — any question, any topic\n" +
+                "✅ Date, time, math, identity\n" +
+                "✅ Device control (alarms, flashlight, media)\n" +
+                "✅ GPS location\n\n" +
+                "🌐 Connect internet anytime for live weather, news & web search."
+
+            tvModelInfo.text =
+                "Model: ${recommended.displayName}\n" +
+                "Size: $sizeStr · RAM: ${modelManager.getRamLabel()}\n" +
+                "Status: ✅ Downloaded and ready"
+
+            progressBar.visibility  = View.GONE
+            tvProgress.visibility   = View.GONE
+            btnAction.visibility    = View.GONE
+
+            btnSkip.text = "▶️ Start NexuzyAI"
+            btnSkip.setOnClickListener { finishSetup() }
+
+            // Auto-proceed after 2s — no need to make user tap anything
+            btnSkip.postDelayed({ finishSetup() }, 2000)
+            return
+        }
+
+        // ══════════════════════════════════════════════════════════════
+        // CASE 2: MLC NOT downloaded + Internet ON → auto-download
+        // ══════════════════════════════════════════════════════════════
         if (hasInternet) {
-            // ── INTERNET ON: auto-start download ─────────────────────────────
             tvInternetBadge.text = "🟢 Internet: Connected — downloading AI model automatically"
             tvInternetBadge.setTextColor(
                 ContextCompat.getColor(this, android.R.color.holo_green_dark))
 
             tvStatus.text =
                 "🚀 Setting up your AI assistant…\n\n" +
-                "ℹ️ The AI model ($sizeStr) is downloading in the background.\n" +
-                "After this ONE-TIME download, NexuzyAI works FULLY OFFLINE forever\n" +
-                "with no internet connection needed.\n\n" +
-                "⚠️ Note: The model cannot be bundled inside the APK — it is too large\n" +
-                "(${sizeStr} vs 100 MB APK limit). This is the same for all on-device AI apps."
+                "⬇️ Downloading AI model ($sizeStr) — ONE TIME only.\n" +
+                "After this download, NexuzyAI works FULLY OFFLINE forever.\n" +
+                "No internet needed ever again for AI chat.\n\n" +
+                "ℹ️ Model cannot be bundled in APK ($sizeStr > 100 MB limit).\n" +
+                "This is standard for all on-device AI apps."
 
             tvModelInfo.text =
-                "Downloading: ${recommended.displayName}\n" +
-                "Size: $sizeStr · RAM on your device: ${modelManager.getRamLabel()}\n" +
+                "Model: ${recommended.displayName}\n" +
+                "Size: $sizeStr · RAM: ${modelManager.getRamLabel()}\n" +
                 recommended.description
 
-            // Progress visible immediately
             progressBar.visibility = View.VISIBLE
             tvProgress.visibility  = View.VISIBLE
             progressBar.progress   = 0
             tvProgress.text        = "Starting download…"
 
-            // Action button = cancel while downloading
-            btnAction.text      = "⏸️ Pause / Use Online Mode Instead"
+            btnAction.text      = "⏸️ Cancel — Use Online AI Instead"
             btnAction.isEnabled = true
             btnAction.setOnClickListener {
                 downloadManager.cancelDownload()
                 isDownloading = false
                 Toast.makeText(this,
-                    "⚠️ Download paused. Using Sarvaam AI online mode.",
+                    "⚠️ Download cancelled. Using Sarvaam AI online mode.",
                     Toast.LENGTH_LONG).show()
                 finishSetup()
             }
 
-            // Skip = same as cancel
             btnSkip.text = "▶️ Skip — Use Online AI (Sarvaam + DuckDuckGo)"
             btnSkip.setOnClickListener {
                 downloadManager.cancelDownload()
                 finishSetup()
             }
 
-            // Auto-start download
             startDownload(recommended)
-
-        } else {
-            // ── NO INTERNET: explain clearly what works and what doesn't ─────────
-            tvInternetBadge.text = "🔴 Internet: Offline"
-            tvInternetBadge.setTextColor(
-                ContextCompat.getColor(this, android.R.color.holo_red_dark))
-
-            tvStatus.text =
-                "⚠️ No internet detected.\n\n" +
-                "You can start the app now with limited offline capability:\n" +
-                "✅ Greetings, date/time, math, identity questions\n" +
-                "❌ Real AI conversations (need MLC model — requires internet to download)\n" +
-                "❌ Weather, news, web search\n\n" +
-                "💡 Connect to Wi-Fi and reopen the app to auto-download the AI model\n" +
-                "   for full offline AI that works forever with no internet."
-
-            tvModelInfo.text =
-                "AI model needed: ${recommended.displayName} ($sizeStr)\n" +
-                "Requires internet to download once. After that: 100% offline."
-
-            // No download possible — hide progress
-            progressBar.visibility = View.GONE
-            tvProgress.visibility  = View.GONE
-
-            // Action button = disabled (no internet)
-            btnAction.text      = "❌ No Internet — Cannot Download"
-            btnAction.isEnabled = false
-
-            // Skip = start with basic mode
-            btnSkip.text = "▶️ Start with Basic Offline Mode"
-            btnSkip.setOnClickListener { finishSetup() }
+            return
         }
+
+        // ══════════════════════════════════════════════════════════════
+        // CASE 3: MLC NOT downloaded + NO Internet → honest limited warning
+        //         (This is the ONLY case where internet warning is shown)
+        // ══════════════════════════════════════════════════════════════
+        tvInternetBadge.text = "🔴 Internet: Offline — AI model not yet downloaded"
+        tvInternetBadge.setTextColor(
+            ContextCompat.getColor(this, android.R.color.holo_red_dark))
+
+        tvStatus.text =
+            "⚠️ No internet detected AND AI model not downloaded yet.\n\n" +
+            "Right now you can use:\n" +
+            "✅ Greetings, date/time, math, identity questions\n" +
+            "✅ Device control (alarms, flashlight, media)\n" +
+            "✅ GPS location (coordinates)\n\n" +
+            "❌ Real AI conversations — need MLC model\n" +
+            "   (requires internet ONCE to download, then works offline forever)\n\n" +
+            "💡 Connect to Wi-Fi then reopen the app.\n" +
+            "   Download happens automatically — no setup needed."
+
+        tvModelInfo.text =
+            "Model needed: ${recommended.displayName} ($sizeStr)\n" +
+            "Download once → works offline forever.\n" +
+            "Your device RAM: ${modelManager.getRamLabel()}"
+
+        progressBar.visibility = View.GONE
+        tvProgress.visibility  = View.GONE
+
+        btnAction.text      = "❌ No Internet — Cannot Download Now"
+        btnAction.isEnabled = false
+
+        btnSkip.text = "▶️ Start with Basic Mode (Connect Wi-Fi Later)"
+        btnSkip.setOnClickListener { finishSetup() }
     }
 
     private fun startDownload(model: ModelManager.ModelInfo) {
@@ -196,18 +227,17 @@ class FirstLaunchActivity : AppCompatActivity() {
                         val dlMb    = downloaded / (1024 * 1024)
                         val totMb   = total / (1024 * 1024)
                         progressBar.progress = percent
-                        tvProgress.text      = "⬇️ Downloading AI model: $dlMb MB / $totMb MB ($percent%)"
+                        tvProgress.text      = "⬇️ $dlMb MB / $totMb MB ($percent%)"
                     }
                 },
                 onComplete = {
                     runOnUiThread {
-                        isDownloading  = false
-                        tvProgress.text = "✅ AI model ready! NexuzyAI will now work fully offline."
+                        isDownloading        = false
                         progressBar.progress = 100
+                        tvProgress.text      = "✅ AI model ready! Full offline AI enabled."
                         Toast.makeText(this@FirstLaunchActivity,
-                            "✅ AI model downloaded! Full offline AI enabled.",
+                            "✅ Download complete! NexuzyAI now works 100% offline.",
                             Toast.LENGTH_LONG).show()
-                        // Auto-proceed to chat after 1.5s
                         progressBar.postDelayed({ finishSetup() }, 1500)
                     }
                 },
@@ -217,7 +247,7 @@ class FirstLaunchActivity : AppCompatActivity() {
                         if (error == "Download cancelled") return@runOnUiThread
                         tvProgress.text = "⚠️ Download failed: $error"
                         Toast.makeText(this@FirstLaunchActivity,
-                            "⚠️ Download failed. Using online AI mode (Sarvaam + DuckDuckGo).",
+                            "⚠️ Download failed. Starting with online AI mode.",
                             Toast.LENGTH_LONG).show()
                         finishSetup()
                     }
@@ -235,7 +265,6 @@ class FirstLaunchActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        // Don't cancel on destroy — if user presses home, download continues
-        // Only cancel if user explicitly tapped cancel/skip
+        // Don't auto-cancel on destroy — background download continues if user presses Home
     }
 }
