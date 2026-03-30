@@ -6,7 +6,7 @@
 <h1 align="center">NexuzyAI</h1>
 <p align="center">
   <b>On-Device + Cloud-Hybrid AI Assistant for Android</b><br/>
-  Offline-first · No download required on first install · MLC-LLM + Sarvaam AI + DuckDuckGo<br/>
+  Offline-first · MLC-LLM + Sarvaam AI + DuckDuckGo<br/>
   Voice + Text · Android 8–16 · Zero data collection
 </p>
 
@@ -15,95 +15,121 @@
   <a href="https://github.com/david0154/NexuzyAI-Android/blob/main/PRIVACY_POLICY.md"><img src="https://img.shields.io/badge/Privacy-No%20Data%20Collected-green.svg" /></a>
   <img src="https://img.shields.io/badge/Android-API%2026--36-brightgreen.svg" />
   <img src="https://img.shields.io/badge/Kotlin-2.0-purple.svg" />
-  <img src="https://img.shields.io/badge/Offline-First%20%E2%80%94%20No%20Download%20Needed-orange.svg" />
   <a href="SETUP_GUIDE.md"><img src="https://img.shields.io/badge/Setup-Full%20Guide-orange.svg" /></a>
 </p>
 
 ---
 
-## 📦 First Install — No Internet Required
+## 📦 First Install — Honest Explanation
 
+> ⚠️ **You cannot download the AI model without internet.** Here is what exactly works in each scenario:
+
+### 🔴 No Internet, Fresh Install
+| What works | What does NOT work |
+|---|---|
+| ✅ App opens and runs | ❌ MLC model download (needs internet) |
+| ✅ Greetings, date, time, math | ❌ Real AI conversations |
+| ✅ Alarms, flashlight, media, app launch | ❌ Weather, news, web search |
+| ✅ GPS location (coordinates only) | ❌ City name / reverse geocoding |
+| ⚠️ Very basic NLP only (`LocalOfflineEngine`) | ❌ Sarvaam AI + DuckDuckGo |
+
+> `LocalOfflineEngine` is **NOT** a full AI model. It is a lightweight rule-based engine
+> that only answers: greetings · who are you · date/time · simple math.
+> For anything else it says: *"I need internet for this."*
+
+---
+
+### 🟢 With Internet (Recommended for best experience)
 ```
-Install APK
-    ↓
-Splash Screen
-    ↓
-First Launch Screen
-    ├─ No Internet → "▶ Start Now" → Chat (fully offline, works immediately)
-    └─ Internet ON → Optional: Download MLC model (~700MB–2.1GB)
-                    OR skip → Chat (still fully works offline)
+Install APK → First Launch Screen
+    └─ Internet ON
+          ├─ Option A: "⬇ Download MLC Model" (~700MB–2.1GB)
+          │      ↓ downloads once, stored on device
+          │      ↓ after download: full AI works OFFLINE forever
+          └─ Option B: "▶ Start Now" (skip download)
+                 ↓ uses Sarvaam AI + DuckDuckGo online
+                 ↓ real AI answers — but needs internet each time
 ```
 
-> ✅ **No download is ever mandatory.** The app works on first launch with zero internet
-> using the built-in `LocalOfflineEngine` (handles greetings, date/time, math, identity).
-> Connect to internet anytime for Sarvaam AI + DuckDuckGo hybrid answers.
+### 🔵 After MLC Model Downloaded (Best Offline Experience)
+```
+No Internet needed anymore for AI chat!
+MLC model runs 100% on-device, no server, no data sent.
+Download is ONE TIME only (~700MB to ~2.1GB depending on your RAM).
+```
 
 ---
 
 ## 🧠 AI Engine Routing
 
 ```
-┌────────────────────────────────────────────────────┐
-│  INTERNET ON                                      │
-│  DuckDuckGo ──┬─► HybridAnswerEngine ► answer   │
-│  Sarvaam AI ──┤          ▲                       │
-│  Local MLC  ──┘ (fused when available)           │
-├────────────────────────────────────────────────────┤
-│  INTERNET OFF                                     │
-│  MLC model (if downloaded) ► LocalOfflineEngine   │
-│  Handles: greetings, date/time, math, identity    │
-│  → ALWAYS gives a real answer — never silent     │
-└────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────┐
+│  INTERNET ON                                           │
+│  DuckDuckGo ──┬─► HybridAnswerEngine ► answer        │
+│  Sarvaam AI ──┤                                       │
+│  Local MLC  ──┘ (fused when MLC downloaded)           │
+├────────────────────────────────────────────────────────┤
+│  INTERNET OFF + MLC downloaded                         │
+│  MLC on-device model ► full AI offline conversations   │
+├────────────────────────────────────────────────────────┤
+│  INTERNET OFF + NO MLC download                        │
+│  LocalOfflineEngine (rule-based only)                  │
+│  ✅ greetings · date/time · math · identity            │
+│  ❌ real AI chat — shows "connect to internet" message │
+└────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## 🧠 Model Tiers
 
-NexuzyAI automatically selects the best model based on device RAM.
-MLC models are **optional** — downloadable from the First Launch screen.
+MLC models are **optional** but recommended for full offline AI.
+Downloaded once from the First Launch screen when internet is available.
 
-| Display Name | Backend Model | RAM Required | Size | Best For |
+| Display Name | Backend Model | RAM Required | Download Size | Best For |
 |---|---|---|---|---|
 | **David AI Lite** | Qwen3-0.6B-q0f16-MLC | ≥ 2 GB | ~700 MB | Budget / low-RAM phones |
 | **David AI 1B** | Qwen3-1.7B-q4f16_1-MLC | ≥ 3 GB | ~1.4 GB | Most mid-range phones |
 | **David AI 2B** | gemma-2-2b-it-q4f16_1-MLC | ≥ 5 GB | ~2.1 GB | Flagship phones |
 
+> Model is auto-selected based on your device RAM. Download happens once.
+> After download, full AI works permanently offline.
+
 ---
 
 ## ✨ Features
 
-| Feature | Internet | Details |
+| Feature | Needs Internet? | Notes |
 |---|---|---|
-| 📦 First Install | ❌ Not required | Works immediately offline via LocalOfflineEngine |
-| 🧠 On-Device AI | ❌ Offline | MLC-LLM — optional download, 100% private |
-| 💡 LocalOfflineEngine | ❌ Offline | Built-in NLP: date, time, math, greetings, identity |
-| 🌐 Sarvaam AI API | ✅ Online | Cloud AI for accurate answers |
-| 🦆 DuckDuckGo Search | ✅ Online | Grounding context for AI answers |
-| 🔗 Link Reader | ✅ Online | Paste URL — AI reads & summarizes |
-| 🌦️ Weather | ✅ Online | Real-time via Open-Meteo |
-| 📰 News | ✅ Online | Google News RSS + NewsAPI |
-| 📍 Location | Both | GPS offline; city name online |
-| 🗳️ Google Maps SDK | ✅ Online | Maps + Geocoding API |
-| 📱 Device Control | ❌ Offline | Alarms, flashlight, media, app launch |
-| 🎙️ Voice + Text | Both | Both input modes for all features |
-| 🔒 Zero Data | ❌ Offline | No servers, no tracking ever |
+| 🧠 On-Device MLC AI | ⚠️ Once to download | After download: 100% offline forever |
+| 💡 LocalOfflineEngine | ❌ Never | Basic only: greetings, date, time, math, identity |
+| 🌐 Sarvaam AI API | ✅ Always | Cloud AI — best answer quality online |
+| 🦆 DuckDuckGo Search | ✅ Always | Grounding context for AI answers |
+| 🔗 Link Reader | ✅ Always | Paste URL — AI reads & summarizes |
+| 🌦️ Weather | ✅ Always | Real-time via Open-Meteo |
+| 📰 News | ✅ Always | Google News RSS + NewsAPI |
+| 📍 Location | ⚠️ Partial | GPS offline ✅, city name needs internet |
+| 🗳️ Google Maps SDK | ✅ Always | Maps + Geocoding API |
+| 📱 Device Control | ❌ Never | Alarms, flashlight, media, app launch |
+| 🎙️ Voice + Text | ❌ Never | Both input modes work offline |
+| 🔒 Zero Data Collection | ❌ Never | No servers, no tracking |
 
 ---
 
-## 🌐 Internet vs Offline
+## 🌐 Honest Internet vs Offline Table
 
-| Feature | Offline | Online |
-|---|---|---|
-| AI Chat | ✅ LocalOfflineEngine NLP | ✅ Sarvaam + DuckDuckGo fused |
-| Weather | ❌ Offline message | ✅ Open-Meteo live |
-| News | ❌ Offline message | ✅ RSS + NewsAPI |
-| Location | ✅ GPS coords | ✅ Full city name |
-| Web Search | ❌ Not available | ✅ DuckDuckGo |
-| Link Reader | ❌ Cannot fetch | ✅ OkHttp + HTML strip |
-| Date / Time | ✅ Device clock | ✅ Device clock |
-| Math | ✅ Built-in solver | ✅ Built-in solver |
-| MLC Download | ❌ Unavailable | ✅ Optional via First Launch screen |
+| What you ask | No Internet, No MLC | No Internet + MLC downloaded | Internet (no MLC) |
+|---|---|---|---|
+| "Hello / Hi" | ✅ Answers | ✅ Answers | ✅ Answers |
+| "What time is it?" | ✅ Answers | ✅ Answers | ✅ Answers |
+| "What is 5 + 3?" | ✅ Answers | ✅ Answers | ✅ Answers |
+| "Who made you?" | ✅ Answers | ✅ Answers | ✅ Answers |
+| "Explain quantum physics" | ❌ Needs internet | ✅ MLC answers | ✅ Sarvaam AI answers |
+| "Write me a poem" | ❌ Needs internet | ✅ MLC answers | ✅ Sarvaam AI answers |
+| "What's the weather?" | ❌ Needs internet | ❌ Needs internet | ✅ Open-Meteo live |
+| "Latest news" | ❌ Needs internet | ❌ Needs internet | ✅ RSS + NewsAPI |
+| "Search the web" | ❌ Needs internet | ❌ Needs internet | ✅ DuckDuckGo |
+| Set alarm / flashlight | ✅ Works | ✅ Works | ✅ Works |
 
 ---
 
@@ -137,16 +163,14 @@ cp local.properties.example local.properties
 |---|---|
 | Language | Kotlin 2.0 |
 | UI | Android Views + XML |
-| On-Device AI | [MLC-LLM](https://github.com/mlc-ai/mlc-llm) (`mlc4j`) — optional |
+| On-Device AI | [MLC-LLM](https://github.com/mlc-ai/mlc-llm) (`mlc4j`) — optional download |
 | AI Models | Qwen3-0.6B / Qwen3-1.7B / Gemma-2-2B |
 | Cloud AI | [Sarvaam AI API](https://sarvam.ai) |
 | Web Search | DuckDuckGo Instant Answer API |
-| Offline NLP | `LocalOfflineEngine` (built-in, zero download) |
+| Offline NLP | `LocalOfflineEngine` (rule-based, zero download, basic only) |
 | Hybrid Engine | `HybridAnswerEngine` (parallel async fusion) |
 | First Launch | `FirstLaunchActivity` + `ModelDownloadManager` |
 | Android Compat | API 26 (min) → API 36 (target, Android 16) |
-| Min SDK | Android 8.0 (API 26) |
-| Target SDK | Android 16 (API 36) |
 
 ---
 
@@ -155,14 +179,14 @@ cp local.properties.example local.properties
 ```
 app/src/main/java/ai/nexuzy/assistant/
 ├── SplashActivity.kt            # Routes first-launch vs returning user
-├── FirstLaunchActivity.kt       # First-install screen (offline OK, download optional)
+├── FirstLaunchActivity.kt       # First-install: shows download option if internet available
 ├── ChatActivity.kt
 ├── llm/
 │   ├── HybridAnswerEngine.kt    # Online: DuckDuckGo + Sarvaam fused
-│   ├── LocalOfflineEngine.kt    # Offline: rule-based NLP (always works)
+│   ├── LocalOfflineEngine.kt    # Offline fallback: basic rule-based NLP only
 │   ├── MLCEngineWrapper.kt      # Orchestrates MLC + routing
 │   ├── SarvaamAIClient.kt       # Sarvaam cloud AI
-│   ├── ModelDownloadManager.kt  # Optional MLC model download with progress
+│   ├── ModelDownloadManager.kt  # MLC model download (internet required once)
 │   ├── QwenEngine.kt            # High-level AI interface
 │   ├── ModelManager.kt          # RAM → model tier selection
 │   └── PromptBuilder.kt         # Qwen3 chat template builder
